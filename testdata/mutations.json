@@ -515,5 +515,16 @@
       "./pkg/fido/"
     ],
     "expect": "TestAnUnprovisionedCredentialIsRefused"
+  },
+  {
+    "id": "revert-stale-output-read",
+    "check": "a PoV verdict is read from this run's output directory, never a previous run's",
+    "file": "pkg/revert/challenge.go",
+    "before": "\t\tif before[p] {\n\t\t\tcontinue\n\t\t}\n",
+    "after": "",
+    "expect": "TestRunThatProducedNoOutputDoesNotReadThePreviousRun",
+    "packages": [
+      "./pkg/revert/"
+    ]
   }
 ]

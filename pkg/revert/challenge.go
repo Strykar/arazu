@@ -124,12 +124,16 @@ func (c Challenge) RunPoV(ctx context.Context, blob, harness string, pov corpus.
 	if err != nil {
 		return PoVRun{}, err
 	}
-	// run.sh's own exit status is not the signal, so a non-zero here is only
-	// worth reporting if no output directory appears below.
-	_, _ = c.run(ctx, "./run.sh", "run_pov", abs, harness)
+	// out/output accumulates across runs, so the verdict must come from a
+	// directory this invocation created. run.sh's exit status is not the signal.
+	before := c.outputSet("run_pov")
+	out, runErr := c.run(ctx, "./run.sh", "run_pov", abs, harness)
 
-	dir, err := c.newestOutput("run_pov")
+	dir, err := c.newestOutput("run_pov", before)
 	if err != nil {
+		if runErr != nil {
+			return PoVRun{}, fmt.Errorf("%w: run.sh: %v: %s", err, runErr, tail(string(out), 400))
+		}
 		return PoVRun{}, err
 	}
 	// The case says where the verdict lives; the runner must not decide. A
@@ -168,10 +172,23 @@ func (c Challenge) RunPoV(ctx context.Context, blob, harness string, pov corpus.
 	return run, nil
 }
 
-func (c Challenge) newestOutput(kind string) (string, error) {
+// outputSet records what was there before a run, so the run's own output can be
+// told apart from it.
+func (c Challenge) outputSet(kind string) map[string]bool {
+	entries, _ := filepath.Glob(filepath.Join(c.Root, "out", "output", "*--"+kind))
+	seen := make(map[string]bool, len(entries))
+	for _, p := range entries {
+		seen[p] = true
+	}
+	return seen
+}
+
+// newestOutput returns the newest output directory not present in before, so a
+// run that produced nothing is an error rather than a stale answer.
+func (c Challenge) newestOutput(kind string, before map[string]bool) (string, error) {
 	entries, err := filepath.Glob(filepath.Join(c.Root, "out", "output", "*--"+kind))
-	if err != nil || len(entries) == 0 {
-		return "", fmt.Errorf("no %s output directory under %s/out/output", kind, c.Root)
+	if err != nil {
+		return "", fmt.Errorf("no new %s output directory under %s/out/output: %w", kind, c.Root, err)
 	}
 	type ent struct {
 		path string
@@ -179,6 +196,9 @@ func (c Challenge) newestOutput(kind string) (string, error) {
 	}
 	var es []ent
 	for _, p := range entries {
+		if before[p] {
+			continue
+		}
 		fi, err := os.Stat(p)
 		if err != nil {
 			continue
@@ -186,7 +206,7 @@ func (c Challenge) newestOutput(kind string) (string, error) {
 		es = append(es, ent{p, fi.ModTime().UnixNano()})
 	}
 	if len(es) == 0 {
-		return "", fmt.Errorf("no readable %s output directory", kind)
+		return "", fmt.Errorf("no new %s output directory under %s/out/output", kind, c.Root)
 	}
 	sort.Slice(es, func(i, j int) bool { return es[i].mod > es[j].mod })
 	return es[0].path, nil
