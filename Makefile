@@ -32,7 +32,10 @@ check-env:
 fixtures: build
 	./scripts/make-adversarial.sh
 
-test:
+# Depends on fixtures because testdata/bundles/ is generated, not tracked, so
+# on a fresh clone `make test` failed 14 tests in cmd/ingress-verify until
+# you knew to run `make fixtures` first. test-root already did this.
+test: fixtures
 	go test ./...
 
 # Break each security-relevant check in turn and report which test caught it.
