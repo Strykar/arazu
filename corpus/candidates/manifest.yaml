@@ -1,0 +1,60 @@
+# Candidates we synthesised, as opposed to the ones the challenge ships.
+#
+# All 14 shipped bad patches turned out to be the same class,
+# regression-introducing / new-test-failure, so they are an answer key for
+# exactly one gate stage. Gate M1 grades a patch on whether reverting it alone
+# re-triggers the PoV, and nothing in the shipped set exercises that: every one
+# of them does stop its PoV. These do not, which is what makes them the M1 test.
+#
+# Every entry's label was established by running it through grade-patch.sh, and
+# `evidence` records what was observed rather than what was intended. A candidate
+# that did not behave as designed gets relabelled or dropped, never filed under
+# the class it was written for.
+#
+# Paths are relative to this repository, so each carries patch_root: repo. The
+# challenge's own candidates stay relative to its checkout.
+
+cpv2:
+  - id: cpv2-nonfunctional-late-check
+    patch: corpus/candidates/cpv2/nonfunctional-late-check.diff
+    label: nonfunctional-plausible
+    expected_gate_reason: revert-attribute-fail
+    # The right bound check in the wrong place: auth.len is validated after
+    # ngx_decode_base64 has already written past the buffer. This is the
+    # "green suite proves nothing" case, and it is what a reviewer skimming a
+    # diff for a bounds check would wave through.
+    evidence: >-
+      applies at the pin and builds; the PoV still reports
+      AddressSanitizer: heap-buffer-overflow, so the patch changes code without
+      stopping the vulnerability
+
+  - id: cpv2-boundary-off-by-one
+    patch: corpus/candidates/cpv2/boundary-off-by-one.diff
+    label: boundary-wrong
+    expected_gate_reason: new-sanitizer-finding
+    # The reference fix, off by one. Sizing the allocation to exactly the
+    # decoded length leaves no room for the trailing NUL. The LABEL still
+    # describes the defect (an off-by-one); the REASON changed once the gate
+    # could compare crash sites.
+    evidence: >-
+      applies at the pin and builds. It STOPS the declared vulnerability: on the
+      recovering build the declared site ngx_decode_base64_internal
+      (ngx_string.c) is silent under the patch, and a different overflow appears
+      at ngx_http_auth_basic_user (ngx_http_core_module.c), WRITE of size 1 zero
+      bytes after a 3021-byte region, which is auth.data[auth.len] = 0. Keyed to
+      revert-attribute-fail until 2026-08-11, when the matcher stopped comparing
+      only the sanitizer string: that verdict blamed a patch that does fix the
+      bug
+
+  # The positive control. Step 8's acceptance needs a patch that IS credited,
+  # or a stage broken into refusing everything would pass its own test. This is
+  # the challenge's own reference fix, so it lives in the challenge tree.
+  - id: cpv2-aixcc-good
+    patch: .internal_only/cpv2/patches/nginx/good_patch.diff
+    patch_root: challenge
+    label: good
+    expected_gate_reason: null
+    evidence: >-
+      the challenge ships it as the fix for cpv2, and the grader confirmed on
+      2026-08-10 that it applies at the pin, builds, silences the PoV and
+      introduces no new test failures

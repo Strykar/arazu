@@ -1,0 +1,64 @@
+# A deliberately mis-wired case. Everything here is real except the PoV input.
+#
+# This is Gate M1's third acceptance case, and it is not a bad patch. "Reverting
+# the patch does not re-trigger the PoV" cannot be produced by any patch: it
+# means the PoV was not firing on the pre-patch build either, so the patch was
+# never what stopped it. Only the reproduction can be wrong. The real-world
+# forms are wrong build flags, a sanitizer not enabled, or a PoV that does not
+# actually reach the sink; this case is the third.
+#
+# The candidate is the challenge's own reference fix, which is CORRECT. That is
+# the point. A correct patch, a green suite, and the gate must still refuse to
+# credit it, because nothing in the run demonstrated the vulnerability it claims
+# to fix. This is "green suite proves nothing" in its strongest form: the patch
+# is not merely unproven, it is unprovable from this case's evidence.
+#
+# The expected verdict is ERROR, not REJECT. Nothing was demonstrated, so there
+# is nothing to accept or refuse: the patch was not tested, it did not fail.
+# Stage 1 must stop there, because every downstream stage would then be measuring
+# nothing and would return green.
+#
+# LOAD-BEARING CHECK, re-run it if this fixture is ever regenerated. Verified by
+# execution on 2026-08-10 against the unpatched tree at the pin: the harness RAN
+# the blob (libfuzzer exit=0, "Executed /work/tmp_blob in 21 ms") and produced no
+# AddressSanitizer output. That the harness executed is what makes this a
+# mis-wired reproduction rather than a broken one, and the two states produce
+# identical logs if you only record the absence of a crash. A regenerated blob
+# that fails to run at all would look like a valid fixture and would not be one.
+id: nginx-miswired-cpv2
+language: c
+cwe: CWE-122
+cwe_name: Heap-based Buffer Overflow
+target: nginx
+harness: pov_harness
+
+source:
+  cp_repo: https://github.com/aixcc-public/challenge-004-nginx-cp.git
+  cp_commit: bd4490502e9e8f42b45e536cbc05d78ebc41aa0e
+  src_repo: https://github.com/aixcc-public/challenge-004-nginx-source.git
+  src_ref: hg-asc-v2.0.0
+  src_commit: 077e305de7e7f7a960d0ad440e7ed66f3da5a5ce
+
+pov:
+  # A syntactically valid request that never reaches ngx_http_auth_basic_user,
+  # so the vulnerable build is exercised and stays silent. Lives in this
+  # repository rather than the challenge tree, because we authored it.
+  input: corpus/fixtures/miswired/benign-request.bin
+  input_root: repo
+  # Declared, and never produced. The mismatch between what the case claims the
+  # run will show and what the run shows is the whole fixture.
+  expected_sanitizer: "AddressSanitizer: heap-buffer-overflow"
+  crash_location: "ngx_decode_base64_internal /src/harnesses/bld/src/core/ngx_string.c:1330:14"
+  signal: stderr.log
+
+reference_patch: .internal_only/cpv2/patches/nginx/good_patch.diff
+
+candidates:
+  - id: miswired-cpv2-correct-patch
+    patch: .internal_only/cpv2/patches/nginx/good_patch.diff
+    label: good
+    # Labelled good because the patch IS good. The expected rejection is a
+    # property of the case, not of the candidate, which is why no bad-patch
+    # label fits and why inventing one would misattribute the defect. The
+    # expected outcome is ERROR: undecided, not refused.
+    expected_gate_reason: pov-not-reproduced

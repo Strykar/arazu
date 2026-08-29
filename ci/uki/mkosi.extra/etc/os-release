@@ -1,0 +1,6 @@
+NAME="ARAZU SELF-CHECK"
+PRETTY_NAME="ARAZU SELF-CHECK (boot, read, photograph, power off)"
+ID=arazu
+VERSION_ID=selfcheck
+IMAGE_ID=arazu-selfcheck
+ANSI_COLOR="1;33"

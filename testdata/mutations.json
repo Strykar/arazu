@@ -1,0 +1,519 @@
+[
+  {
+    "id": "sign-duplicate-signer",
+    "check": "a key may not sign the manifest twice (two-person control)",
+    "file": "pkg/manifest/sign.go",
+    "before": "\t\tif seen[id] {\n\t\t\treturn nil, fmt.Errorf(\"%w: key %s signed the manifest more than once\", ErrDuplicateSigner, id)\n\t\t}\n",
+    "after": "",
+    "expect": "TestSameKeyTwiceIsADuplicateSignerNotAShortCount",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "sign-untrusted-signer",
+    "check": "an unprovisioned signer is refused, not skipped",
+    "file": "pkg/manifest/sign.go",
+    "before": "\t\t\treturn nil, fmt.Errorf(\"%w: key %s is not provisioned on this side\", ErrUntrustedSigner, id)",
+    "after": "\t\t\tcontinue",
+    "expect": "TestUntrustedSignerRejected",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "sign-verify-signature",
+    "check": "the signature actually verifies over the canonical manifest",
+    "file": "pkg/manifest/sign.go",
+    "before": "\t\tif !ed25519.Verify(pub, canonical, sig) {",
+    "after": "\t\tif false && !ed25519.Verify(pub, canonical, sig) {",
+    "expect": "TestTamperedMessageFailsVerification",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "sign-threshold",
+    "check": "two distinct signers are required",
+    "file": "pkg/manifest/sign.go",
+    "before": "\tif len(order) < minDistinct {",
+    "after": "\tif len(order) < 1 {",
+    "expect": "TestSingleSignatureIsInsufficient",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "content-hash",
+    "check": "payload bytes match the manifest hash",
+    "file": "pkg/contentstore/contentstore.go",
+    "before": "\t\tif sum != f.SHA256 {",
+    "after": "\t\tif false && sum != f.SHA256 {",
+    "expect": "TestSameLengthEditIsCaught",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "content-size",
+    "check": "payload size matches the manifest",
+    "file": "pkg/contentstore/contentstore.go",
+    "before": "\t\tif size != f.Size {",
+    "after": "\t\tif false && size != f.Size {",
+    "expect": "TestDeclaredSizeMustMatchTheFile",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "scan-non-regular",
+    "check": "the store holds only regular files",
+    "file": "pkg/contentstore/contentstore.go",
+    "before": "\t\tif !d.Type().IsRegular() {",
+    "after": "\t\tif false && !d.Type().IsRegular() {",
+    "expect": "TestSymlinkIsRejectedByScan",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "scan-runs-before-read",
+    "check": "the tree scan runs before any file is read",
+    "file": "pkg/contentstore/contentstore.go",
+    "before": "\tpresent, err := ScanDir(root)\n\tif err != nil {\n\t\treturn err\n\t}",
+    "after": "\tpresent, _ := ScanDir(root)",
+    "expect": "TestSymlinkedDirectoryComponentIsRefusedBeforeAnythingIsRead",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "path-traversal",
+    "check": "a manifest path may not traverse upward",
+    "file": "pkg/contentstore/contentstore.go",
+    "before": "\t\tif elem == \"..\" {",
+    "after": "\t\tif false && elem == \"..\" {",
+    "expect": "TestTraversalPathIsCaught",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "path-allowlist",
+    "check": "a manifest path sits under an allowed prefix",
+    "file": "pkg/contentstore/contentstore.go",
+    "before": "\t\tif strings.HasPrefix(p, prefix) {",
+    "after": "\t\tif true || strings.HasPrefix(p, prefix) {",
+    "expect": "TestPathOutsideAllowlistIsCaught",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "unmanifested-file",
+    "check": "nothing in the store is absent from the manifest",
+    "file": "pkg/contentstore/contentstore.go",
+    "before": "\t\tif !listed[f.Path] {",
+    "after": "\t\tif false && !listed[f.Path] {",
+    "expect": "TestExtraFileIsUnmanifested",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "version-rollback",
+    "check": "a bundle version must be strictly newer than the last accepted",
+    "file": "cmd/ingress-verify/main.go",
+    "before": "\tif m.Version <= last {",
+    "after": "\tif m.Version < last {",
+    "expect": "TestVersionMonotonicityAcrossSeveralAccepts",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "manifest-canonical-bytes",
+    "check": "a manifest must already be in canonical form, byte for byte",
+    "file": "pkg/manifest/manifest.go",
+    "before": "\tif !bytes.Equal(c, bytes.TrimRight(b, \"\\n\")) {",
+    "after": "\tif false && !bytes.Equal(c, bytes.TrimRight(b, \"\\n\")) {",
+    "expect": "TestParseRejectsLeadingWhitespace",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "manifest-schema",
+    "check": "only the known manifest schema is accepted",
+    "file": "pkg/manifest/manifest.go",
+    "before": "\tif m.Schema != Schema {",
+    "after": "\tif false && m.Schema != Schema {",
+    "expect": "TestParseRejectsWrongSchema",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "manifest-unknown-fields",
+    "check": "unknown manifest fields are refused (defence in depth)",
+    "file": "pkg/manifest/manifest.go",
+    "before": "\tdec.DisallowUnknownFields()\n",
+    "after": "",
+    "expect": "TestParseRejectsUnknownFields",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ],
+    "subsumedBy": "manifest-canonical-bytes"
+  },
+  {
+    "id": "sign-keyid-binding",
+    "check": "a trusted-keys line's key id must match its key material",
+    "file": "pkg/manifest/sign.go",
+    "before": "\t\tif got := KeyIDFor(pub); string(got) != fields[0] {",
+    "after": "\t\tif got := KeyIDFor(pub); false && string(got) != fields[0] {",
+    "expect": "TestLoadPublicKeysRejectsMismatchedKeyID",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "stat-non-regular",
+    "check": "a manifested path that is not a regular file is unsafe, not merely wrong",
+    "file": "pkg/contentstore/contentstore.go",
+    "before": "\t\tif !st.Mode().IsRegular() {",
+    "after": "\t\tif false && !st.Mode().IsRegular() {",
+    "expect": "TestSymlinkInPlaceOfAManifestedFileIsUnsafeNotMissing",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ],
+    "subsumedBy": "scan-non-regular"
+  },
+  {
+    "id": "missing-file",
+    "check": "a manifested file that is absent is reported as missing",
+    "file": "pkg/contentstore/contentstore.go",
+    "before": "\t\t\treturn fmt.Errorf(\"%w: %s\", ErrMissingFile, f.Path)",
+    "after": "\t\t\t_ = err",
+    "expect": "TestMissingFileIsCaught",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "content-root-domain",
+    "check": "the content root is domain separated, so it cannot collide with another sha256",
+    "file": "pkg/contentstore/contentstore.go",
+    "before": "\tio.WriteString(h, contentRootDomain)\n",
+    "after": "",
+    "expect": "TestContentRootIsPinnedToAKnownDigest",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "log-entry-hash",
+    "check": "an entry's own hash must match its contents",
+    "file": "pkg/auditlog/auditlog.go",
+    "before": "\t\tif want != e.EntryHash {",
+    "after": "\t\tif false && want != e.EntryHash {",
+    "expect": "TestEditedFieldBreaksChain",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "log-chain-link",
+    "check": "each entry must chain to the previous one",
+    "file": "pkg/auditlog/auditlog.go",
+    "before": "\t\tif e.PrevHash != prev {",
+    "after": "\t\tif false && e.PrevHash != prev {",
+    "expect": "TestEditedEntryWithRecomputedHashBreaksChain",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "log-sequence-order",
+    "check": "entries must be sequentially numbered (defence in depth)",
+    "file": "pkg/auditlog/auditlog.go",
+    "before": "\t\tif e.Seq != wantSeq {",
+    "after": "\t\tif false && e.Seq != wantSeq {",
+    "expect": "TestDeletedEntryBreaksChain",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ],
+    "subsumedBy": "log-chain-link"
+  },
+  {
+    "id": "log-append-to-broken",
+    "check": "a broken chain may not be extended, which would hide the tampering",
+    "file": "pkg/auditlog/auditlog.go",
+    "before": "\t\t\treturn nil, fmt.Errorf(\"refusing to append to a broken chain: %w\", verr)",
+    "after": "\t\t\t_ = verr",
+    "expect": "TestOpenRefusesToExtendABrokenChain",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "gate-reason-mapping",
+    "check": "a rejection reports the reason matching its sentinel error",
+    "file": "cmd/ingress-verify/main.go",
+    "before": "\t\tif errors.Is(err, s) {",
+    "after": "\t\tif false && errors.Is(err, s) {",
+    "expect": "TestAcceptanceTable",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "gate-reason-bad-signature",
+    "check": "one sentinel missing from the mapping is caught, not just the whole loop",
+    "file": "cmd/ingress-verify/main.go",
+    "before": "\t\tmanifest.ErrBadSignature,\n",
+    "after": "",
+    "expect": "TestASignatureThatParsesButDoesNotVerifyIsBadSignature",
+    "packages": [
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "gate-refuses-on-broken-log",
+    "check": "the gate refuses to run when the audit log is unusable",
+    "file": "cmd/ingress-verify/main.go",
+    "before": "\t\tg.emit(\"ERROR\", \"audit-log-unavailable\", 2)\n\t}\n\tdefer l.Close()",
+    "after": "\t\tfmt.Fprintln(os.Stderr, \"continuing unrecorded\")\n\t\treturn\n\t}\n\tdefer l.Close()",
+    "expect": "TestGateRefusesWhenTheAuditLogIsBroken",
+    "packages": [
+      "./pkg/manifest/",
+      "./pkg/contentstore/",
+      "./pkg/auditlog/",
+      "./cmd/ingress-verify/"
+    ]
+  },
+  {
+    "id": "fido-credential-id",
+    "check": "an assertion names the credential it is checked against",
+    "file": "pkg/fido/fido.go",
+    "before": "\tif a.CredentialID != c.ID {",
+    "after": "\tif false && a.CredentialID != c.ID {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestAssertionForAnotherCredentialIsRefused"
+  },
+  {
+    "id": "fido-policy-rp",
+    "check": "a credential is enrolled for the relying party the policy names",
+    "file": "pkg/fido/fido.go",
+    "before": "\tif c.RPID != p.RPID {",
+    "after": "\tif false && c.RPID != p.RPID {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestCredentialEnrolledForAnotherRelyingPartyIsRefused"
+  },
+  {
+    "id": "fido-authdata-trailing",
+    "check": "authenticator data carries no unflagged trailing bytes",
+    "file": "pkg/fido/fido.go",
+    "before": "\tif ad.Flags&(flagAT|flagED) == 0 && len(b) != authDataMinLen {",
+    "after": "\tif false && ad.Flags&(flagAT|flagED) == 0 && len(b) != authDataMinLen {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestMalformedAuthenticatorDataIsRefused"
+  },
+  {
+    "id": "fido-rpid-hash",
+    "check": "the assertion was made for our relying party",
+    "file": "pkg/fido/fido.go",
+    "before": "\tif !bytes.Equal(ad.RPIDHash, want[:]) {",
+    "after": "\tif false && !bytes.Equal(ad.RPIDHash, want[:]) {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestAnAssertionForAnotherRelyingPartyIsRefused"
+  },
+  {
+    "id": "fido-user-presence",
+    "check": "someone physically touched the authenticator",
+    "file": "pkg/fido/fido.go",
+    "before": "\tif !ad.UserPresent() {",
+    "after": "\tif false && !ad.UserPresent() {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestUserPresenceIsRequired"
+  },
+  {
+    "id": "fido-user-verification",
+    "check": "PIN or biometric was satisfied when policy demands it",
+    "file": "pkg/fido/fido.go",
+    "before": "\tif p.RequireUV && !ad.UserVerified() {",
+    "after": "\tif false && p.RequireUV && !ad.UserVerified() {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestUserVerificationIsRequiredOnlyWhenPolicySaysSo"
+  },
+  {
+    "id": "fido-clientdata-binding",
+    "check": "the challenge binds the assertion to this manifest",
+    "file": "pkg/fido/fido.go",
+    "before": "\th.Write(canonical)",
+    "after": "\t_ = canonical",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestAnAssertionDoesNotTransferToAnotherManifest"
+  },
+  {
+    "id": "fido-eddsa-verify",
+    "check": "the eddsa assertion signature verifies",
+    "file": "pkg/fido/fido.go",
+    "before": "\t\tif !ed25519.Verify(ed25519.PublicKey(c.PublicKey), signed, sig) {",
+    "after": "\t\tif false && !ed25519.Verify(ed25519.PublicKey(c.PublicKey), signed, sig) {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestValidAssertionIsAcceptedAndBadSignatureIsNot"
+  },
+  {
+    "id": "fido-es256-verify",
+    "check": "the es256 assertion signature verifies",
+    "file": "pkg/fido/fido.go",
+    "before": "\t\tif !ecdsa.VerifyASN1(&ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}, sum[:], sig) {",
+    "after": "\t\tif false && !ecdsa.VerifyASN1(&ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}, sum[:], sig) {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestES256AssertionRoundTrips"
+  },
+  {
+    "id": "fido-key-size",
+    "check": "an eddsa credential carries a 32-byte key",
+    "file": "pkg/fido/fido.go",
+    "before": "\t\tif len(c.PublicKey) != ed25519.PublicKeySize {",
+    "after": "\t\tif false && len(c.PublicKey) != ed25519.PublicKeySize {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestAlgorithmIsPinnedToTheCredential"
+  },
+  {
+    "id": "fido-counter-monotonic",
+    "check": "the signature counter advances, so a clone is visible",
+    "file": "pkg/fido/fido.go",
+    "before": "\tcase ad.SignCount > lastCount:",
+    "after": "\tcase true:",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestCounterMustAdvance"
+  },
+  {
+    "id": "fido-require-counter",
+    "check": "a policy demanding a counter refuses an authenticator without one",
+    "file": "pkg/fido/fido.go",
+    "before": "\t\tif p.RequireCounter {",
+    "after": "\t\tif false && p.RequireCounter {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestAnAuthenticatorThatDoesNotCountIsReportedNotHidden"
+  },
+  {
+    "id": "fido-duplicate-signer",
+    "check": "two-person control counts people, not credentials",
+    "file": "pkg/fido/signers.go",
+    "before": "\t\tif seen[res.Signer] {",
+    "after": "\t\tif false && seen[res.Signer] {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestOnePersonWithTwoTokensIsStillOnePerson"
+  },
+  {
+    "id": "fido-signer-threshold",
+    "check": "enough distinct signers are present",
+    "file": "pkg/fido/signers.go",
+    "before": "\tif len(seen) < minDistinct {",
+    "after": "\tif len(seen) < 1 {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestOneSignerIsInsufficient"
+  },
+  {
+    "id": "fido-unprovisioned-credential",
+    "check": "an unprovisioned credential is refused",
+    "file": "pkg/fido/signers.go",
+    "before": "\t\tc, ok := s.byID[a.CredentialID]\n\t\tif !ok {",
+    "after": "\t\tc, ok := s.byID[a.CredentialID]\n\t\tif false && !ok {",
+    "packages": [
+      "./pkg/fido/"
+    ],
+    "expect": "TestAnUnprovisionedCredentialIsRefused"
+  }
+]

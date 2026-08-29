@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Build arazu into the image so boot is fast and the check starts immediately.
+set -eux
+DEST="$DESTDIR/usr/local/arazu"
+mkdir -p "$DEST"
+
+# Install the two scripts from source rather than keeping a second copy under
+# mkosi.extra. They were duplicated, and the copies drifted: coldrun gained
+# exfat support, an offline corpus path and 68 other changed lines that the
+# image never saw, because the file the image installs was the other one. The
+# selfcheck pair still agreed, which is how a duplicate looks right up until it
+# does not.
+install -Dm755 "$SRCDIR"/repo/ci/uki/selfcheck.sh "$DESTDIR/usr/local/bin/arazu-selfcheck"
+install -Dm755 "$SRCDIR"/repo/ci/uki/coldrun.sh   "$DESTDIR/usr/local/bin/arazu-coldrun"
+cp -a "$SRCDIR"/repo/{go.mod,go.sum,vendor,pkg,cmd,bpf,scripts,corpus,testdata,Makefile} "$DEST"/
+cd "$DEST"
+# vmlinux.h comes from the HOST, copied in above. mkosi's build sandbox has no
+# /sys/kernel/btf, so generating it here fails with "failed to load BTF".
+#
+# Building against the host's BTF is correct rather than a compromise: the
+# program is CO-RE, so it relocates against the BTF of whatever kernel actually
+# loads it. What would break is shipping a prebuilt .o compiled without CO-RE.
+[ -s bpf/vmlinux.h ] || { echo "bpf/vmlinux.h missing: run 'make vmlinux' on the host first" >&2; exit 1; }
+make -C bpf egress_deny.bpf.o
+mkdir -p bin
+GOFLAGS=-mod=vendor GOPROXY=off go build -o bin/ ./cmd/...
+# The containment run needs a verified bundle, and contained-run refuses
+# without one. Generate the fixtures here so the image carries them.
+GOFLAGS=-mod=vendor GOPROXY=off ./scripts/make-adversarial.sh || true

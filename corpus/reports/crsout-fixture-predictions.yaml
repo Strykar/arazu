@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Filed BEFORE generating any model output. pkg/crsout's tests run against a
+# hand-written diff, which is clean in ways real output is not. This exercises
+# the capture path against a patch a local model actually produced.
+written: 2026-08-19
+by: the build, before the run
+
+# ---------------------------------------------------------------------------
+# WHAT IS BEING RUN
+#
+#   ollama, gpt-oss:20b, the libpng iCCP defect, the real prompt shape
+#   -> the raw response, as emitted
+#   -> the same response through corpus/fix-hunks.py, re-anchored
+#   both laid out in the CRS's directory shape and fed to crsout.Capture
+#
+# Both, not one. apply_mode already distinguishes them, and a capture path
+# tested only against repaired output has never met what the model produced.
+
+# ---------------------------------------------------------------------------
+# THE MEASURED FAILURE DISTRIBUTION this is being tested against:
+#   21 apply failures, of which 14 were fabricated context and 7 were bare @@
+#   headers carrying no ranges.
+
+predictions:
+
+  as_emitted_capture:
+    predict: Captured, NOT crs-malformed-artifact
+    reasoning: >-
+      looksLikeDiff is strings.Contains(body, "@@") and nothing else. A bare @@
+      header with no ranges contains "@@", so it passes. So does a fenced block
+      with prose above it, as long as a hunk marker appears anywhere in the file.
+      The capture will accept output that cannot apply.
+    what_this_would_mean: >-
+      NOT a bug in the model and not a surprise about the CRS. It is
+      looksLikeDiff being a presence check where an applies check is needed, and
+      the capture handing a gradable-looking case to a gate that will then fail
+      at patch-does-not-apply. The verdict is still correct; the stage that
+      reports it is one later than it should be.
+
+  re_anchored_capture:
+    predict: Captured, and byte-different from the as-emitted one
+    reasoning: >-
+      fix-hunks re-computes ranges by anchoring context against the source. If
+      the two captures are byte-identical, either the model emitted correct
+      ranges or fix-hunks did nothing, and which of those it is matters.
+
+  the_thing_worth_learning:
+    question: does looksLikeDiff need to become an applies check?
+    predict: yes, and the fixture is what shows it
+    pre_decision: >-
+      If as-emitted captures clean and the patch cannot apply, crs-malformed-
+      artifact is widened to mean "does not apply at the pin" rather than "has no
+      @@". That is a REAL check, requiring the tree, which the capture does not
+      have today. So the honest alternative is a seventh outcome naming exactly
+      what was and was not verified at capture time, rather than pretending a
+      presence check is a validity check. Decide which BEFORE seeing the output.
+
+# ---------------------------------------------------------------------------
+# FALSIFIERS
+#
+# - as-emitted comes back crs-malformed-artifact: looksLikeDiff is stronger than
+#   this reasoning credits, and the prediction was wrong in the safe direction.
+# - the two captures are byte-identical: fix-hunks is a no-op on this input, and
+#   the apply_mode distinction buys nothing here even though it buys something
+#   on the yield numbers.
+# - capture declines for a reason not among the six: the outcome vocabulary is
+#   incomplete and gets a new name before the run is repeated.
+
+# ---------------------------------------------------------------------------
+# OUTCOME, 2026-08-19. gpt-oss:20b, 38715 prompt tokens, 12934 eval, 1m49s on
+# one 4090. Appended, not edited in.
+
+model_output:
+  verbatim_shape: >-
+    a fenced ```diff block, a BARE @@ with no ranges, no diff --git header
+    despite the prompt asking for one, and a paragraph of prose after the fence.
+    The 7-of-21 failure mode, first try, unprompted.
+  committed_as: testdata/crsout/gpt-oss-20b-libpng.as-emitted.txt
+
+as_emitted_capture_result:
+  predicted: Captured, NOT crs-malformed-artifact
+  observed: Captured
+  verdict: PREDICTION HELD
+  detail: >-
+    extract-diff.py strips the fence and the prose and leaves the bare @@.
+    git apply --check exits 128, "No valid patches in input". crsout.Capture
+    accepts it, because looksLikeDiff is strings.Contains(body, "@@").
+
+re_anchored_capture_result:
+  predicted: Captured, byte-different from as-emitted
+  observed: byte-different, ranges repaired to "@@ -1419,5 +1419,13 @@"
+  verdict: PREDICTION HELD, and one thing it did not anticipate
+  detail: >-
+    re-anchoring produced correct-looking ranges and the patch STILL does not
+    apply: git apply --check exits 1, "patch failed: pngrutil.c:1419". The
+    model's context lines do not match the source. Range repair fixes the
+    header; it cannot rescue fabricated context. That is the 14-of-21 mode and
+    the 7-of-21 mode in the same patch.
+
+the_thing_worth_learning_result:
+  question: does looksLikeDiff need to become an applies check?
+  answer: yes, and the pre-decision stands
+  what_was_decided_before_the_run: >-
+    a real applies check needs the tree, which the capture does not have. So
+    rather than pretend a presence check is a validity check, the honest fix is
+    a seventh outcome naming exactly what was and was not verified at capture
+    time. NOT DONE YET: recorded here so it is a decision taken before the
+    result rather than a repair improvised after it.
+  current_state: >-
+    pkg/crsout/realoutput_test.go asserts the CURRENT behaviour against the real
+    fixture and says in its own comment that if looksLikeDiff is strengthened,
+    the test should flip to expecting Malformed. The gap is pinned, not hidden.

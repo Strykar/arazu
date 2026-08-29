@@ -1,0 +1,10 @@
+# The CONTROL run has to reach the network or the containment table proves
+# nothing: "the contained run reached nothing" is explained just as well by a
+# machine with no link at all. DHCP on any wired interface, and the self-check
+# reports the control probe's verdict explicitly so a missing link shows up as
+# a named failure rather than a silent pass.
+[Match]
+Type=ether
+
+[Network]
+DHCP=yes

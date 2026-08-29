@@ -1,0 +1,12 @@
+{
+  "taken_from": "/var/lib/arazu-corpus/nginx/challenge-004-nginx-cp/out/output/1786323421.688850379--run_tests",
+  "cpv": "cpv4",
+  "tree": "good_patch",
+  "private_tests": true,
+  "nproc_val": "8",
+  "host_caps": "cap_wake_alarm=i",
+  "baseline_failures": [
+    "proxy_bind_transparent_capability.t",
+    "proxy_bind_transparent.t"
+  ]
+}

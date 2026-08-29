@@ -1,0 +1,73 @@
+[
+  {
+    "id": "tpm-expected-pcr",
+    "check": "the tpm's pcr value is checked against the one computed in go after every extend",
+    "file": "pkg/tpmseal/tpmseal.go",
+    "before": "\tif want := ExpectedPCR23(contentRoot); got != want {",
+    "after": "\tif want := ExpectedPCR23(contentRoot); false && got != want {",
+    "expect": "TestTPMAgreesWithTheComputedPCRValue",
+    "packages": [
+      "./pkg/tpmseal/"
+    ],
+    "note": "may escape: the test does its own comparison, and a tpm that disagreed with sha256 cannot be induced on real hardware. Closing it needs a simulator.",
+    "untestableReason": "the precondition is a TPM that disagrees with SHA256 or returns success with no material; neither can be induced on real hardware, so closing this needs a TPM simulator"
+  },
+  {
+    "id": "tpm-empty-secret",
+    "check": "provisioning refuses to seal an empty secret",
+    "file": "pkg/tpmseal/tpmseal.go",
+    "before": "\tif len(secret) == 0 {",
+    "after": "\tif false && len(secret) == 0 {",
+    "expect": "TestProvisionRefusesAnEmptySecret",
+    "packages": [
+      "./pkg/tpmseal/"
+    ]
+  },
+  {
+    "id": "tpm-empty-unseal",
+    "check": "an unseal that returns no material is a failure, not a success",
+    "file": "pkg/tpmseal/tpmseal.go",
+    "before": "\tif len(out) == 0 {",
+    "after": "\tif false && len(out) == 0 {",
+    "expect": "TestUnmeasuredStateFailsClosed",
+    "packages": [
+      "./pkg/tpmseal/"
+    ],
+    "untestableReason": "the precondition is a TPM that disagrees with SHA256 or returns success with no material; neither can be induced on real hardware, so closing this needs a TPM simulator"
+  },
+  {
+    "id": "bpf-zero-inode",
+    "check": "attaching with a zero namespace inode is refused, since it would deny nothing",
+    "file": "pkg/egress/bpf.go",
+    "before": "\tif inode == 0 {",
+    "after": "\tif false && inode == 0 {",
+    "expect": "TestAttachRefusesAZeroInode",
+    "packages": [
+      "./pkg/egress/"
+    ]
+  },
+  {
+    "id": "bpf-lsm-required",
+    "check": "attach refuses when the bpf lsm is not in the active list",
+    "file": "pkg/egress/bpf.go",
+    "before": "\tif err := RequireBPFLSM(); err != nil {\n\t\treturn nil, err\n\t}\n",
+    "after": "",
+    "expect": "TestRequireBPFLSMAgreesWithTheKernel",
+    "packages": [
+      "./pkg/egress/"
+    ],
+    "note": "expected to escape on a host where the bpf lsm IS active: the guard only fires on a kernel without it. That is the silent-failure case the guard exists for, and it cannot be reproduced here without rebooting with a different lsm= line.",
+    "untestableReason": "the guard only fires on a kernel where the bpf LSM is absent from the active lsm= list; this host has it, and reproducing needs a reboot"
+  },
+  {
+    "id": "bpf-deny-verdict",
+    "check": "the connect hook returns -EPERM rather than allowing",
+    "file": "bpf/egress_deny.bpf.c",
+    "before": "\t\tbump(CTR_CONNECT_DENIED);\n\t\treturn -EPERM;",
+    "after": "\t\tbump(CTR_CONNECT_DENIED);\n\t\treturn 0;",
+    "expect": "TestLayerAttributionByErrno",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  }
+]

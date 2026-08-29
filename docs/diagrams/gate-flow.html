@@ -1,0 +1,483 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Target to verdict</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --paper:#f5f5f5; --ink:#2d3142; --muted:#4f5d75; --soft:#7a8399;
+          --accent:#eb6c36; --rule:rgba(45,49,66,0.12); }
+  body { margin:0; padding:3rem 2rem; background:var(--paper); color:var(--ink);
+         font-family:'Geist',sans-serif; }
+  .wrap { max-width:1400px; margin:0 auto; }
+  .eyebrow { font-family:'Geist Mono',monospace; font-size:8px; letter-spacing:0.14em;
+             text-transform:uppercase; color:var(--muted); margin:0 0 0.5rem; }
+  h1 { font-family:'Instrument Serif',serif; font-weight:400; font-size:1.75rem;
+       margin:0 0 0.5rem; }
+  .sub { color:var(--muted); font-size:0.9rem; margin:0 0 2rem; max-width:72ch; }
+  svg { width:100%; height:auto; display:block; }
+  .cards { display:grid; grid-template-columns:1.1fr 1fr 1.05fr; gap:1rem;
+           margin-top:2rem; }
+  .card { background:#ffffff; border:1px solid var(--rule); border-radius:6px;
+          padding:1.25rem; }
+  .card h3 { font-family:'Geist',sans-serif; font-size:0.85rem; font-weight:600;
+             margin:0 0 0.6rem; }
+  .card-header { display:flex; align-items:center; gap:0.5rem; }
+  .card-dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .dot-ink { background:var(--ink); } .dot-coral { background:var(--accent); }
+  .dot-muted { background:var(--muted); }
+  .card p { font-size:0.8rem; line-height:1.5; color:var(--muted); margin:0 0 0.6rem; }
+  .card p:last-child { margin-bottom:0; }
+  .card code { font-family:'Geist Mono',monospace; font-size:0.72rem; color:var(--ink); }
+  footer { margin-top:2rem; padding-top:1rem; border-top:1px solid var(--rule);
+           font-family:'Geist Mono',monospace; font-size:8px; letter-spacing:0.1em;
+           color:var(--soft); text-transform:uppercase; }
+</style>
+<div class="wrap">
+  <p class="eyebrow">Arazu — one pipeline, two halves</p>
+  <h1>Target to verdict</h1>
+  <p class="sub">Buttercup finds the bug and writes the patch. The gate decides whether
+  to believe it. Everything left of the seam is the CRS we run unchanged; everything
+  right of it is the acceptance layer. The two share no model, no prompt and no failure
+  mode, and that is the point. Gate stages run in order and stop at the first failure,
+  and every refusal names a reason from a fixed vocabulary.</p>
+
+<svg viewBox="0 0 1880 1432" xmlns="http://www.w3.org/2000/svg" role="img"
+     aria-label="Two-panel flowchart. Left: the Buttercup CRS pipeline from task ingest through build, indexing, fuzzing, crash tracing and patching to written artifacts, with Mull as a planned discovery signal. Centre: the handoff across the seam. Right: the Arazu gate, an ed25519 and FIDO2 envelope check then five ordered stages inside a BPF LSM contained run, ending in accept, reject or error.">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+    <marker id="arrow-soft" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#7a8399"/></marker>
+  </defs>
+  <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+  <!-- ================= PANEL FRAMES ================= -->
+  <rect x="40" y="56" width="760" height="1296" rx="8" fill="none" stroke="rgba(45,49,66,0.10)" stroke-width="1"/>
+  <rect x="1040" y="56" width="800" height="1296" rx="8" fill="none" stroke="rgba(45,49,66,0.10)" stroke-width="1"/>
+  <text x="56" y="44" fill="#4f5d75" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.14em">FIND — BUTTERCUP, THE AIxCC CRS, RUN UNCHANGED</text>
+  <text x="1056" y="44" fill="#4f5d75" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.14em">JUDGE — ARAZU, THE ACCEPTANCE LAYER</text>
+
+  <!-- containment boundary, drawn first so nothing hides behind a node -->
+  <rect x="1248" y="348" width="344" height="632" rx="8" fill="none"
+        stroke="rgba(79,93,117,0.35)" stroke-width="1" stroke-dasharray="6,4"/>
+
+  <!-- ================= ARROWS (drawn before boxes) ================= -->
+
+  <!-- left spine -->
+  <path d="M420 152 L420 196" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M420 288 L420 332" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M420 820 L420 864" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M420 936 L420 980" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M420 1052 L420 1096" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M420 1192 L420 1236" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- scheduler fans into build and index -->
+  <path d="M360 400 V 420 Q360 428 352 428 H 283 Q275 428 275 436 V 444"
+        stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M480 400 V 420 Q480 428 488 428 H 557 Q565 428 565 436 V 444"
+        stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <!-- build-bot rejoins the spine into the campaign -->
+  <path d="M275 536 V 548 Q275 556 283 556 H 412 Q420 556 420 564 V 708"
+        stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <!-- program-model feeds the patcher: context, not flow -->
+  <path d="M700 490 H 740 Q748 490 748 498 V 1136 Q748 1144 740 1144 H 700"
+        stroke="#7a8399" stroke-width="1" stroke-dasharray="5,4" fill="none" marker-end="url(#arrow-soft)"/>
+
+  <!-- the handoff, across the seam -->
+  <path d="M700 1280 H 912 Q920 1280 920 1272 V 800"
+        stroke="#4f5d75" stroke-width="1.2" fill="none" marker-end="url(#arrow)"/>
+  <path d="M920 580 V 132 Q920 124 928 124 H 1240"
+        stroke="#4f5d75" stroke-width="1.2" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- right spine -->
+  <path d="M1420 160 L1420 208" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1420 320 L1420 364" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1420 460 L1420 492" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1420 588 L1420 620" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1420 716 L1420 748" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1420 844 L1420 876" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1420 972 L1420 1100" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1420 1188 L1420 1236" stroke="#4f5d75" stroke-width="1" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- rejections: topmost stage takes the farthest lane, so no connector crosses another -->
+  <path d="M1580 412 H 1804 Q1812 412 1812 420 V 996" stroke="#eb6c36" stroke-width="1"
+        fill="none" marker-end="url(#arrow-accent)"/>
+  <path d="M1580 540 H 1768 Q1776 540 1776 548 V 996" stroke="#eb6c36" stroke-width="1"
+        fill="none" marker-end="url(#arrow-accent)"/>
+  <path d="M1580 668 H 1732 Q1740 668 1740 676 V 996" stroke="#eb6c36" stroke-width="1"
+        fill="none" marker-end="url(#arrow-accent)"/>
+  <path d="M1580 796 H 1696 Q1704 796 1704 804 V 996" stroke="#eb6c36" stroke-width="1"
+        fill="none" marker-end="url(#arrow-accent)"/>
+
+  <!-- undetermined: dashed, because "cannot tell" is not a rejection -->
+  <path d="M1260 540 H 1084 Q1076 540 1076 548 V 996" stroke="#eb6c36" stroke-width="1"
+        stroke-dasharray="5,4" fill="none" marker-end="url(#arrow-accent)"/>
+  <path d="M1260 668 H 1120 Q1112 668 1112 676 V 996" stroke="#eb6c36" stroke-width="1"
+        stroke-dasharray="5,4" fill="none" marker-end="url(#arrow-accent)"/>
+
+  <!-- ================= ARROW LABELS (opaque mask, 6-10px clear of the stroke) ================= -->
+  <!-- left spine -->
+  <rect x="432" y="160" width="136" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="436" y="168" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">POST /webhook/trigger_task</text>
+  <rect x="432" y="296" width="72" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="436" y="304" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">READY_TASKS</text>
+  <rect x="220" y="428" width="44" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="224" y="436" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">BUILD</text>
+  <rect x="576" y="428" width="44" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="580" y="436" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">INDEX</text>
+  <rect x="332" y="600" width="76" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="336" y="608" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">BUILD_OUTPUT</text>
+  <rect x="706" y="464" width="52" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="710" y="472" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">CONTEXT</text>
+  <rect x="432" y="828" width="40" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="436" y="836" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">CRASH</text>
+  <rect x="432" y="944" width="128" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="436" y="952" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">TRACED_VULNERABILITIES</text>
+  <rect x="432" y="1060" width="144" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="436" y="1068" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">CONFIRMED_VULNERABILITIES</text>
+  <rect x="432" y="1200" width="52" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="436" y="1208" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">PATCHES</text>
+
+  <!-- handoff -->
+  <rect x="812" y="1252" width="68" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="816" y="1260" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">PATCH + PoV</text>
+  <rect x="1060" y="96" width="76" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1064" y="104" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">INTO THE GATE</text>
+
+  <!-- right spine -->
+  <rect x="1432" y="172" width="100" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1436" y="180" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">INTO THE ENVELOPE</text>
+  <rect x="1432" y="324" width="56" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1436" y="332" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">ADMITTED</text>
+  <rect x="1432" y="468" width="32" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1436" y="476" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">PASS</text>
+  <rect x="1432" y="596" width="32" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1436" y="604" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">PASS</text>
+  <rect x="1432" y="724" width="32" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1436" y="732" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">PASS</text>
+  <rect x="1432" y="852" width="32" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1436" y="860" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">PASS</text>
+  <rect x="1432" y="1008" width="32" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1436" y="1016" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">PASS</text>
+  <rect x="1432" y="1200" width="44" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1436" y="1208" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">SIGNED</text>
+
+  <!-- rejection reasons -->
+  <rect x="1600" y="388" width="72" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1604" y="396" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">EMPTY-PATCH</text>
+  <rect x="1600" y="500" width="124" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1604" y="508" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">PATCH-DOES-NOT-APPLY</text>
+  <rect x="1600" y="516" width="128" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1604" y="524" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">REVERT-ATTRIBUTE-FAIL</text>
+  <rect x="1600" y="644" width="108" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1604" y="652" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">CLASS-REPLAY-FAIL</text>
+  <rect x="1600" y="756" width="128" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1604" y="764" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">NEW-SANITIZER-FINDING</text>
+  <rect x="1600" y="772" width="100" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1604" y="780" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">NEW-TEST-FAILURE</text>
+
+  <!-- undetermined reasons -->
+  <rect x="1128" y="500" width="112" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1132" y="508" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">POV-NOT-REPRODUCED</text>
+  <rect x="1112" y="516" width="128" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1116" y="524" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">POV-SITE-UNDETERMINED</text>
+  <rect x="1132" y="628" width="108" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1136" y="636" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">CLASS-NOT-DEFINED</text>
+  <rect x="1092" y="644" width="148" height="12" rx="2" fill="#f5f5f5"/>
+  <text x="1096" y="652" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.02em">UNADJUDICATED-BEHAVIOUR-CHANGE</text>
+
+  <!-- ================= LEFT PANEL NODES ================= -->
+  <!-- L1 target -->
+  <rect x="140" y="88" width="560" height="64" rx="20" fill="#f5f5f5"/>
+  <rect x="140" y="88" width="560" height="64" rx="20" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="420" y="112" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">A target</text>
+  <text x="420" y="128" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">repo @ base..head + an oss-fuzz project</text>
+  <text x="420" y="144" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">any of 1300+ upstream projects, none prepared</text>
+
+  <!-- L2 ingest -->
+  <rect x="140" y="196" width="560" height="92" rx="6" fill="#f5f5f5"/>
+  <rect x="140" y="196" width="560" height="92" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="148" y="204" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+  <text x="170" y="213" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">INGEST</text>
+  <text x="420" y="240" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">task-server, task-downloader</text>
+  <text x="420" y="260" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">clones the repo at base and head</text>
+  <text x="420" y="276" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">clones &lt;fuzz-tooling&gt;/projects/&lt;name&gt;</text>
+
+  <!-- L3 scheduler -->
+  <rect x="140" y="332" width="560" height="68" rx="6" fill="#f5f5f5"/>
+  <rect x="140" y="332" width="560" height="68" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="148" y="340" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+  <text x="168" y="349" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">SCHED</text>
+  <text x="420" y="372" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">scheduler</text>
+  <text x="420" y="390" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">fans one task into build and index work</text>
+
+  <!-- L4a build-bot -->
+  <rect x="140" y="444" width="270" height="92" rx="6" fill="#f5f5f5"/>
+  <rect x="140" y="444" width="270" height="92" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="148" y="452" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+  <text x="168" y="461" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">BUILD</text>
+  <text x="275" y="488" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">build-bot</text>
+  <text x="275" y="506" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">oss-fuzz helper.py in dind</text>
+  <text x="275" y="522" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">one harness per sanitizer</text>
+
+  <!-- L4b program-model -->
+  <rect x="430" y="444" width="270" height="92" rx="6" fill="#f5f5f5"/>
+  <rect x="430" y="444" width="270" height="92" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="438" y="452" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+  <text x="458" y="461" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">INDEX</text>
+  <text x="565" y="488" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">program-model</text>
+  <text x="565" y="506" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">cscope index of the tree</text>
+  <text x="565" y="522" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">code context for the patcher</text>
+
+  <!-- L4c Mull, planned: a discovery signal, not a gate stage -->
+  <g opacity="0.55">
+    <path d="M574 652 V 676 Q574 684 566 684 H 468 Q460 684 460 692 V 708"
+          stroke="#7a8399" stroke-width="1" stroke-dasharray="5,4" fill="none" marker-end="url(#arrow-soft)"/>
+    <rect x="484" y="660" width="72" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="488" y="668" fill="#7a8399" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">WHERE TO FUZZ</text>
+    <rect x="448" y="568" width="252" height="84" rx="6" fill="#f5f5f5"/>
+    <rect x="448" y="568" width="252" height="84" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.55)" stroke-width="1" stroke-dasharray="4,3"/>
+    <rect x="456" y="576" width="52" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+    <text x="482" y="585" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">PLANNED</text>
+    <text x="574" y="610" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Mull</text>
+    <text x="574" y="628" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">mutates the target, not the gate</text>
+    <text x="574" y="644" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">survivors localise weak tests</text>
+  </g>
+
+  <!-- L5 campaign -->
+  <rect x="140" y="708" width="560" height="112" rx="6" fill="#f5f5f5"/>
+  <rect x="140" y="708" width="560" height="112" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="148" y="716" width="36" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+  <text x="166" y="725" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">LOOP</text>
+  <text x="420" y="752" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">The fuzzing campaign</text>
+  <text x="420" y="772" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">seed-gen — an LLM writes inputs from the harness</text>
+  <text x="420" y="788" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">fuzzer-bot — libFuzzer under ASan and UBSan</text>
+  <text x="420" y="804" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">merger-bot + coverage-bot steer the next round</text>
+
+  <!-- L6 tracer-bot -->
+  <rect x="140" y="864" width="560" height="72" rx="6" fill="#f5f5f5"/>
+  <rect x="140" y="864" width="560" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="148" y="872" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+  <text x="168" y="881" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">TRACE</text>
+  <text x="420" y="906" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">tracer-bot</text>
+  <text x="420" y="924" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">re-runs the crash under the sanitizer, parses the stack</text>
+
+  <!-- L7 pov-reproducer -->
+  <rect x="140" y="980" width="560" height="72" rx="6" fill="#f5f5f5"/>
+  <rect x="140" y="980" width="560" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="148" y="988" width="52" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+  <text x="174" y="997" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">CONFIRM</text>
+  <text x="420" y="1022" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">pov-reproducer</text>
+  <text x="420" y="1040" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">replays the input; keeps only what fires again</text>
+
+  <!-- L8 patcher -->
+  <rect x="140" y="1096" width="560" height="96" rx="6" fill="#f5f5f5"/>
+  <rect x="140" y="1096" width="560" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="148" y="1104" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+  <text x="168" y="1113" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">PATCH</text>
+  <text x="420" y="1138" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">patcher</text>
+  <text x="420" y="1156" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">a multi-agent LLM loop over the cscope index</text>
+  <text x="420" y="1172" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">its own check: PoVs fixed, suite green</text>
+
+  <!-- L9 artifacts -->
+  <rect x="140" y="1236" width="560" height="88" rx="20" fill="#f5f5f5"/>
+  <rect x="140" y="1236" width="560" height="88" rx="20" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="164" y="1248" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+  <text x="180" y="1257" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">OUT</text>
+  <text x="420" y="1280" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Artifacts</text>
+  <text x="420" y="1298" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">povs/*.bin · patches/*.patch</text>
+  <text x="420" y="1314" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">sarifs/*.sarif · bundles/*.json</text>
+
+  <!-- ================= THE SEAM ================= -->
+  <rect x="812" y="580" width="216" height="220" rx="8" fill="#2d3142" stroke="#2d3142" stroke-width="1"/>
+  <rect x="828" y="596" width="52" height="12" rx="2" fill="transparent" stroke="rgba(245,245,245,0.45)" stroke-width="0.8"/>
+  <text x="854" y="605" fill="rgba(245,245,245,0.85)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">HANDOFF</text>
+  <text x="920" y="632" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Across the seam</text>
+  <text x="920" y="652" fill="#bfc0c0" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">make download-artifacts</text>
+  <text x="920" y="668" fill="#bfc0c0" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">kubectl cp run-data</text>
+  <text x="920" y="684" fill="#bfc0c0" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">grade-patch.sh case patch</text>
+  <line x1="836" y1="704" x2="1004" y2="704" stroke="rgba(245,245,245,0.20)" stroke-width="0.8"/>
+  <text x="920" y="724" fill="rgba(245,245,245,0.55)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.14em">SEPARATED ON PURPOSE</text>
+  <text x="920" y="744" fill="#bfc0c0" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">no shared model</text>
+  <text x="920" y="760" fill="#bfc0c0" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">no shared prompt</text>
+  <text x="920" y="776" fill="#bfc0c0" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">no shared failure mode</text>
+
+  <!-- ================= RIGHT PANEL NODES ================= -->
+  <!-- R1 candidate -->
+  <rect x="1240" y="88" width="360" height="72" rx="20" fill="#f5f5f5"/>
+  <rect x="1240" y="88" width="360" height="72" rx="20" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="1420" y="116" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">A candidate, and its case</text>
+  <text x="1420" y="134" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">the patch Buttercup wrote</text>
+  <text x="1420" y="150" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">the case pins target, input, sanitizer</text>
+
+  <!-- R2 envelope -->
+  <rect x="1240" y="208" width="360" height="112" rx="6" fill="#f5f5f5"/>
+  <rect x="1240" y="208" width="360" height="112" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="1248" y="216" width="56" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+  <text x="1276" y="225" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">ENVELOPE</text>
+  <text x="1420" y="252" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">ingress-verify</text>
+  <text x="1420" y="272" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">two ed25519 signatures over canonical JSON</text>
+  <text x="1420" y="288" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">sha256 content root, path allowlist, version floor</text>
+  <text x="1420" y="304" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">FIDO2: RP binding, presence, verification, counter</text>
+
+  <!-- containment label, breaking the box edge so the rule reads as one shape -->
+  <rect x="1272" y="340" width="84" height="16" fill="#f5f5f5"/>
+  <text x="1276" y="352" fill="#4f5d75" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.12em">CONTAINED RUN</text>
+
+  <!-- the gate's own self-test, sitting where the panel is otherwise empty -->
+  <rect x="1056" y="380" width="176" height="104" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+  <rect x="1064" y="388" width="52" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.40)" stroke-width="0.8"/>
+  <text x="1090" y="397" fill="rgba(79,93,117,0.9)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">SELF-TEST</text>
+  <text x="1144" y="424" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">make mutation-test</text>
+  <text x="1144" y="444" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">breaks each check in turn</text>
+  <text x="1144" y="460" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">a check no test catches</text>
+  <text x="1144" y="476" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">has no evidence behind it</text>
+
+  <!-- M0 -->
+  <path d="M1420 364 L1580 412 L1420 460 L1260 412 Z" fill="#f5f5f5"/>
+  <path d="M1420 364 L1580 412 L1420 460 L1260 412 Z" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="1420" y="392" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">M0 · patch effect</text>
+  <text x="1420" y="410" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">parses the unified diff before any build</text>
+  <text x="1420" y="426" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">no changed line, nothing to attribute</text>
+
+  <!-- M1 -->
+  <path d="M1420 492 L1580 540 L1420 588 L1260 540 Z" fill="#f5f5f5"/>
+  <path d="M1420 492 L1580 540 L1420 588 L1260 540 Z" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="1420" y="520" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">M1 · revert to attribute</text>
+  <text x="1420" y="538" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">runs the PoV pre-patch, then patched</text>
+  <text x="1420" y="554" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">sanitizer string, never exit status</text>
+
+  <!-- M2 -->
+  <path d="M1420 620 L1580 668 L1420 716 L1260 668 Z" fill="#f5f5f5"/>
+  <path d="M1420 620 L1580 668 L1420 716 L1260 668 Z" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="1420" y="648" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">M2 · falsifying class</text>
+  <text x="1420" y="666" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">replays every class member on two builds</text>
+  <text x="1420" y="682" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">candidate vs reference; any divergence</text>
+
+  <!-- M3 -->
+  <path d="M1420 748 L1580 796 L1420 844 L1260 796 Z" fill="#f5f5f5"/>
+  <path d="M1420 748 L1580 796 L1420 844 L1260 796 Z" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="1420" y="776" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">M3 · sanitizer + tests</text>
+  <text x="1420" y="794" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">ASan/UBSan diffed against the pre-patch build</text>
+  <text x="1420" y="810" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">test delta vs a recorded baseline</text>
+
+  <!-- M5, not built yet -->
+  <g opacity="0.5">
+    <path d="M1580 924 H 1660 Q1668 924 1668 932 V 996" stroke="#eb6c36" stroke-width="1"
+          fill="none" marker-end="url(#arrow-accent)"/>
+    <rect x="1600" y="900" width="96" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="1604" y="908" fill="#eb6c36" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.06em">NONDETERMINISTIC</text>
+    <path d="M1420 876 L1580 924 L1420 972 L1260 924 Z" fill="#f5f5f5"/>
+    <path d="M1420 876 L1580 924 L1420 972 L1260 924 Z" fill="rgba(45,49,66,0.02)"
+          stroke="rgba(45,49,66,0.55)" stroke-width="1" stroke-dasharray="4,3"/>
+    <text x="1420" y="904" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">M5 · non-determinism</text>
+    <text x="1420" y="922" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">sample K candidates, replay the class</text>
+    <text x="1420" y="938" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">disagreement is the oracle</text>
+  </g>
+
+  <!-- what the containment box is made of -->
+  <text x="1248" y="1000" fill="#7a8399" font-size="7" font-family="'Geist Mono',monospace" letter-spacing="0.14em">BPF LSM</text>
+  <text x="1248" y="1018" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace">lsm/socket_connect</text>
+  <text x="1248" y="1034" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace">lsm/socket_sendmsg</text>
+  <text x="1248" y="1050" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace">scoped by netns inode</text>
+
+  <!-- signature -->
+  <rect x="1240" y="1100" width="360" height="88" rx="6" fill="#f5f5f5"/>
+  <rect x="1240" y="1100" width="360" height="88" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+  <rect x="1248" y="1108" width="44" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.40)" stroke-width="0.8"/>
+  <text x="1270" y="1117" fill="rgba(79,93,117,0.9)" font-size="7" font-family="'Geist Mono',monospace" text-anchor="middle" letter-spacing="0.08em">HUMAN</text>
+  <text x="1420" y="1144" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Signature</text>
+  <text x="1420" y="1162" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">seal-tool extends the content root into PCR 23</text>
+  <text x="1420" y="1178" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">FIDO2 touch; unseal fails if the measurement moved</text>
+
+  <!-- accept -->
+  <rect x="1240" y="1236" width="360" height="72" rx="20" fill="#f5f5f5"/>
+  <rect x="1240" y="1236" width="360" height="72" rx="20" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="1420" y="1264" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Accept</text>
+  <text x="1420" y="1282" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">dossier: PoV, revert proof, class replay, sanitizer</text>
+  <text x="1420" y="1298" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">sha256 hash chain; log-verify recomputes it</text>
+
+  <!-- error -->
+  <rect x="1048" y="996" width="184" height="76" rx="20" fill="#f5f5f5"/>
+  <rect x="1048" y="996" width="184" height="76" rx="20" fill="rgba(235,108,54,0.10)" stroke="#eb6c36" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="1140" y="1024" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Error</text>
+  <text x="1140" y="1042" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">could not prove</text>
+  <text x="1140" y="1058" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">routes to the harness</text>
+
+  <!-- reject -->
+  <rect x="1640" y="996" width="200" height="76" rx="20" fill="#f5f5f5"/>
+  <rect x="1640" y="996" width="200" height="76" rx="20" fill="rgba(235,108,54,0.10)" stroke="#eb6c36" stroke-width="1"/>
+  <text x="1740" y="1024" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist',sans-serif" text-anchor="middle">Reject</text>
+  <text x="1740" y="1042" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">a determination</text>
+  <text x="1740" y="1058" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace" text-anchor="middle">named by its reason</text>
+
+  <!-- ================= LEGEND ================= -->
+  <line x1="40" y1="1388" x2="1840" y2="1388" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+  <text x="40" y="1412" fill="#4f5d75" font-size="8" font-family="'Geist Mono',monospace" letter-spacing="0.14em">LEGEND</text>
+  <rect x="140" y="1402" width="20" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="168" y="1412" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace">step</text>
+  <path d="M240 1408 L256 1400 L272 1408 L256 1416 Z" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="280" y="1412" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace">gate stage</text>
+  <path d="M380 1408 L396 1400 L412 1408 L396 1416 Z" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.55)" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="420" y="1412" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace">planned, not built</text>
+  <line x1="560" y1="1408" x2="592" y2="1408" stroke="#eb6c36" stroke-width="1"/>
+  <text x="600" y="1412" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace">refusal, with its reason</text>
+  <line x1="780" y1="1408" x2="812" y2="1408" stroke="#eb6c36" stroke-width="1" stroke-dasharray="5,4"/>
+  <text x="820" y="1412" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace">undetermined, routes to the harness</text>
+  <line x1="1060" y1="1408" x2="1092" y2="1408" stroke="#7a8399" stroke-width="1" stroke-dasharray="5,4"/>
+  <text x="1100" y="1412" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace">signal, not flow</text>
+  <rect x="1240" y="1400" width="24" height="16" rx="4" fill="none" stroke="rgba(79,93,117,0.35)" stroke-width="1" stroke-dasharray="6,4"/>
+  <text x="1272" y="1412" fill="#4f5d75" font-size="9" font-family="'Geist Mono',monospace">contained run — netns with no route out</text>
+</svg>
+
+  <div class="cards">
+    <div class="card">
+      <p class="eyebrow">The left half</p>
+      <div class="card-header"><span class="card-dot dot-ink"></span><h3>Buttercup, run unchanged</h3></div>
+      <p>Trail of Bits' AIxCC CRS, deployed as shipped: 18 subcharts on Kubernetes,
+      coordinating over Redis queues, building targets through oss-fuzz's own
+      <code>helper.py</code> inside a privileged dind daemon. It takes real input today, so
+      every project already onboarded to upstream oss-fuzz is a valid target, over 1300 of
+      them, with nothing prepared on our side.</p>
+      <p>Model choice is a LiteLLM routing change, not a rebuild, so the CRS cannot tell a
+      local model from a frontier one. That is what makes the yield-versus-safety claim
+      testable rather than asserted.</p>
+      <p>Mull is the planned addition on this side. Note the direction: Mull mutates the
+      <em>target</em> and asks whether the project's suite notices, so survivors are a prior
+      for where to fuzz. Arazu's <code>make mutation-test</code> mutates the <em>gate's own
+      checks</em> and fails if one survives. Same word, opposite directions.</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">Why the seam exists</p>
+      <div class="card-header"><span class="card-dot dot-coral"></span><h3>The engine cannot tell its own patches apart</h3></div>
+      <p>Two runs of the same libpng challenge, same host, same input. Run 1 rediscovered
+      libpng's own fix. Run 2 changed one line so the bound matched the array, which really
+      does fix the overflow, but left the <code>png_uint_16</code> element type in place, so
+      the keyword scan reads two bytes at a time and no keyword parses at all.</p>
+      <p>Every earlier signal cleared it. The PoV stopped firing, so M1 credited it. ASan and
+      UBSan were clean, so M3 passed it. 29 PoV variants and the full suite passed, and
+      Buttercup's own check reported that all PoVs were fixed. Only replaying the falsifying
+      class caught it, and that is M2.</p>
+      <p>Both ship as <code>run1.patch</code> and <code>run2.patch</code> under
+      <code>corpus/falsifying-class/libpng-iccp/</code>. Two runs is not a rate: it says the
+      failure mode is real and reachable at $5.50, not how often it happens.</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">The right half</p>
+      <div class="card-header"><span class="card-dot dot-muted"></span><h3>Eleven reasons, and the line between them</h3></div>
+      <p>Nothing here is a model's opinion. Each stage decides by executing the target under
+      podman, inside a network namespace with only loopback up, behind an
+      <code>lsm/socket_connect</code> and <code>lsm/socket_sendmsg</code> denial keyed on the
+      namespace inode. The signing key is sealed under a TPM policy over PCR 23, so tampering
+      after acceptance moves the measurement and refuses the signature rather than producing
+      one over changed output.</p>
+      <p>A refusal names a reason from a fixed vocabulary, and the vocabulary splits. Seven
+      reasons are determinations about the candidate. Four say the run could not prove
+      anything and route an operator to the harness rather than to the patch. Keeping those
+      apart is what stops the gate inventing a verdict it never earned.</p>
+    </div>
+  </div>
+
+  <footer>Stages short-circuit — the first failure ends the run · M2 needs a reference fix today, and M5 is not built; see SCOPE.md · left half: trailofbits/buttercup, AGPL-3.0</footer>
+</div>

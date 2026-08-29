@@ -1,0 +1,18 @@
+diff --git a/pngrutil.c b/pngrutil.c
+index 01e08bf..118ee77 100644
+--- a/pngrutil.c
++++ b/pngrutil.c
+@@ -1419,11 +1419,10 @@ png_handle_iCCP(png_structrp png_ptr, png_inforp info_ptr, png_uint_32 length)
+    if ((png_ptr->colorspace.flags & PNG_COLORSPACE_HAVE_INTENT) == 0)
+    {
+       uInt read_length, keyword_length;
+-      uInt max_keyword_wbytes = 41;
+-      wpng_byte keyword[max_keyword_wbytes];
++      png_byte keyword[81];
+ 
+       /* Find the keyword; the keyword plus separator and compression method
+-       * bytes can be at most 41 wide characters long.
++       * bytes can be at most 81 bytes long.
+        */
+       read_length = sizeof(keyword); /* maximum */
+       if (read_length > length)

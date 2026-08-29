@@ -1,0 +1,151 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package signer
+
+import (
+	"bytes"
+	"crypto/ed25519"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
+// Namespace is the ssh-keygen signature namespace. Signatures made for one
+// namespace do not verify in another, so a signature collected for some
+// other purpose cannot be replayed as a manifest approval.
+const Namespace = "arazu-manifest"
+
+// ErrVerifyFailed is returned when a signature does not verify. It is one
+// error for every backend so a caller cannot accidentally treat a hardware
+// failure as softer than a software one.
+var ErrVerifyFailed = fmt.Errorf("bad-signature")
+
+// Verify checks one signature over msg against a provisioned key.
+//
+// Dispatch is on the algorithm in the signature line, but the trusted key's
+// algorithm has to agree. Without that check a signer provisioned as a
+// hardware key could be satisfied by a software signature carrying the same
+// key ID, which would quietly undo the reason for requiring a token.
+func Verify(msg []byte, sig Signature, key TrustedKey) error {
+	if sig.KeyID != key.ID {
+		return fmt.Errorf("%w: signature key id %s does not match the trusted key %s",
+			ErrVerifyFailed, sig.KeyID, key.ID)
+	}
+	if sig.Alg != key.Alg {
+		return fmt.Errorf("%w: key %s is provisioned as %s but the signature claims %s",
+			ErrVerifyFailed, key.ID, key.Alg, sig.Alg)
+	}
+
+	switch sig.Alg {
+	case AlgEd25519:
+		if len(key.Ed25519) != ed25519.PublicKeySize {
+			return fmt.Errorf("%w: key %s has no ed25519 material", ErrVerifyFailed, key.ID)
+		}
+		if !ed25519.Verify(key.Ed25519, msg, sig.Payload) {
+			return fmt.Errorf("%w: ed25519 signature from %s does not verify", ErrVerifyFailed, key.ID)
+		}
+		return nil
+
+	case AlgSSHEd25519, AlgSKEd25519:
+		return verifySSH(msg, sig, key)
+	}
+	return fmt.Errorf("%w: %q", ErrUnknownAlgorithm, sig.Alg)
+}
+
+// verifySSH shells out to ssh-keygen -Y verify.
+//
+// Using ssh-keygen rather than parsing the signature here is deliberate. An
+// sk signature carries a flags byte and a signature counter alongside the
+// ed25519 signature, and the bytes actually signed are a wrapper around the
+// message rather than the message itself. Reimplementing that is exactly the
+// sort of thing that is subtly wrong for years, and OpenSSH already has the
+// canonical implementation.
+func verifySSH(msg []byte, sig Signature, key TrustedKey) error {
+	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		return fmt.Errorf("%w: ssh-keygen is needed to verify %s signatures: %v",
+			ErrVerifyFailed, sig.Alg, err)
+	}
+
+	dir, err := os.MkdirTemp("", "arazu-verify-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+
+	// ssh-keygen matches the principal in the allowed-signers file against
+	// -I. The key ID is used as the principal so the identity checked is the
+	// same one the manifest names.
+	allowed := filepath.Join(dir, "allowed_signers")
+	line := fmt.Sprintf("%s %s\n", key.ID, strings.TrimSpace(key.SSHLine))
+	if err := os.WriteFile(allowed, []byte(line), 0o600); err != nil {
+		return err
+	}
+
+	sigPath := filepath.Join(dir, "manifest.sig")
+	if err := os.WriteFile(sigPath, sig.Payload, 0o600); err != nil {
+		return err
+	}
+
+	cmd := exec.Command("ssh-keygen", "-Y", "verify",
+		"-f", allowed,
+		"-I", string(key.ID),
+		"-n", Namespace,
+		"-s", sigPath)
+	cmd.Stdin = bytes.NewReader(msg)
+
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%w: %s signature from %s did not verify: %s",
+			ErrVerifyFailed, sig.Alg, key.ID, strings.TrimSpace(out.String()))
+	}
+	return nil
+}
+
+// SignSSH produces a signature with an SSH private key.
+//
+// This runs on the low side, never in the boundary. With an sk key the token
+// will ask for a touch and the call blocks until it gets one, which is the
+// point of using one.
+func SignSSH(keyPath string, msg []byte) (Signature, error) {
+	dir, err := os.MkdirTemp("", "arazu-sign-")
+	if err != nil {
+		return Signature{}, err
+	}
+	defer os.RemoveAll(dir)
+
+	msgPath := filepath.Join(dir, "manifest.json")
+	if err := os.WriteFile(msgPath, msg, 0o600); err != nil {
+		return Signature{}, err
+	}
+
+	cmd := exec.Command("ssh-keygen", "-Y", "sign", "-f", keyPath, "-n", Namespace, msgPath)
+	var errb bytes.Buffer
+	cmd.Stderr = &errb
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		return Signature{}, fmt.Errorf("ssh-keygen sign: %v: %s", err, strings.TrimSpace(errb.String()))
+	}
+
+	armoured, err := os.ReadFile(msgPath + ".sig")
+	if err != nil {
+		return Signature{}, err
+	}
+
+	pub, err := os.ReadFile(keyPath + ".pub")
+	if err != nil {
+		return Signature{}, err
+	}
+	id, err := KeyIDForSSH(string(pub))
+	if err != nil {
+		return Signature{}, err
+	}
+
+	alg := AlgSSHEd25519
+	if strings.HasPrefix(strings.TrimSpace(string(pub)), "sk-ssh-ed25519") {
+		alg = AlgSKEd25519
+	}
+	return Signature{Alg: alg, KeyID: id, Payload: armoured}, nil
+}

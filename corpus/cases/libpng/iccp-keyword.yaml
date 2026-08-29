@@ -1,0 +1,197 @@
+# Not generated. This case was assembled from a Buttercup run on 2026-08-09 and
+# every claim in it was established by building and running the three variants:
+# corpus/falsifying-class/libpng-iccp/run.sh reproduces the table.
+#
+# What makes this case worth more than the challenge-authored ones: the wrong
+# candidate is not synthesised. Buttercup produced it, for $5.50, and its own
+# quality check reported "All PoVs were fixed" alongside a green suite. It is
+# the engine's real failure mode rather than a constructed one.
+id: libpng-iccp-keyword
+language: c
+root: repo
+cwe: CWE-125
+cwe_name: Out-of-bounds read
+target: libpng
+harness: libpng_read_fuzzer
+
+# Corrected 13 Aug. The three values below were previously a 404 repository, a
+# second 404 repository, and a branch name that exists nowhere — all invented by
+# extrapolating the nginx case's `aixcc-public/challenge-004-<target>-cp` naming.
+# The real values were in the tree the whole time, in
+# buttercup/orchestrator/scripts/task_crs.sh, which is the authoritative record
+# of what this challenge IS: it is the task Buttercup was actually given.
+#
+# Note the shape differs from nginx: there is ONE repository holding the source,
+# with the vulnerability on a branch, rather than a CP repo plus a source repo.
+# The harness is built from separate oss-fuzz tooling, recorded below.
+# FIELD NAMES ARE THE Go STRUCT'S (pkg/corpus.Source), not prettier ones. A first
+# pass here renamed them to repo/head_ref/head_commit. Load is strict —
+# KnownFields(true) — so it REJECTS an unknown key rather than dropping it, and
+# would have failed loudly. What let the rename survive was that nothing called
+# Load on this file: the Go tests built Cases in memory, so the protection
+# existed and was never reached. pkg/corpus/cases_load_test.go now loads every
+# case file, which is the check that catches this class.
+#
+# cp_* and src_* coincide because there is ONE repository, unlike nginx's CP repo
+# plus source repo. That the schema has two pairs at all is the nginx shape
+# generalised from one example; expressing this properly is schema work, not a
+# value edit, and is deliberately not done here.
+#
+# The harness libpng_read_fuzzer is built from separate oss-fuzz tooling, which
+# the fuzz_tooling_* keys below now record and stage-corpus.sh stages.
+source:
+  # Selected by PROVENANCE, not reproduction: challenges/{delta-scan,full-scan,
+  # lp-delta-01} all carry the same wpng_byte injection and all three accept
+  # reference_patch, so behaviour cannot discriminate between them.
+  # buttercup/orchestrator/scripts/task_crs.sh names this one as the task
+  # Buttercup was actually given, which is a fact about the challenge's identity
+  # rather than an inference from how it behaves.
+  cp_repo: https://github.com/tob-challenges/example-libpng
+  cp_commit: a5bf8a9719a7203742fbdd413423b3802bfa0f5b
+  src_repo: https://github.com/tob-challenges/example-libpng
+  src_ref: challenges/lp-delta-01
+  src_commit: a5bf8a9719a7203742fbdd413423b3802bfa0f5b
+  # "[automated] Set base state", the ancestor of src_ref: the pre-injection
+  # tree. Recorded in task_crs.sh as challenge_repo_base_ref and previously only
+  # in a comment here, so buttercup-task.sh submitted head as base and asked the
+  # CRS to diff nothing.
+  base_commit: 5bf8da2d7953974e5dfbd778429c3affd461f51a
+  # The harness is built from separate oss-fuzz tooling, pinned. Previously
+  # recorded only as prose above, which meant the staging script could not
+  # derive it and would have needed its own copy of these values.
+  fuzz_tooling_repo: https://github.com/trail-of-forks/oss-fuzz
+  fuzz_tooling_ref: fix-libpng
+  fuzz_tooling_commit: b6126d689c4a95146843fda0cea24221ab18c385
+  fuzz_tooling_project: libpng
+
+pov:
+  # This input serves twice: it fires the sanitizer on the unpatched build and
+  # it is also the class discriminator below. That is not a coincidence. The
+  # injected bug is in keyword parsing, so any PNG carrying an ICC profile
+  # exercises it, which is why an incomplete fix here is invisible to a crash
+  # oracle and obvious to a class replay.
+  input: corpus/falsifying-class/libpng-iccp/falsifying-input.png
+  # WHICH SANITIZER, recorded because the string is meaningless without it. This
+  # is a UBSan message and does not appear in an ASan build at all: the same
+  # defect reports there as "AddressSanitizer: dynamic-stack-buffer-overflow".
+  # The field was carrying a value whose truth depended on a build configuration
+  # nothing recorded, which made it uncheckable rather than merely imprecise.
+  sanitizer: undefined
+  # Verified 2026-08-15 by building --sanitizer undefined against
+  # challenges/lp-delta-01 and reproducing. The previously declared string ended
+  # "wpng_byte [*]"; the real output names the array's size expression. Recorded
+  # as emitted, so the field can be compared literally.
+  #
+  # CORRECTED 2026-08-21: the space before the bracket was never emitted by any
+  # toolchain here. The 08-15 pass fixed "[*]" to "[max_keyword_wbytes]" and kept
+  # the space from the string it was replacing, so "recorded as emitted" was
+  # aspirational: this line was edited, not pasted. That is exactly the failure
+  # the phrase was meant to prevent.
+  #
+  # It mattered, because the comparison is a literal strings.Contains in
+  # pkg/revert/challenge.go and pkg/classreplay/classreplay.go. With the space the
+  # match fails, SanitizerFired goes false, and the case grades as
+  # pov-not-reproduced: an ERROR that blames the reproduction for a defect in this
+  # field. It fails safe, never toward an accept, and it still meant the libpng
+  # case could not grade.
+  #
+  # Settled by running the same VLA out-of-bounds under both toolchains that can
+  # build this target, rather than by reading either:
+  #   host clang 22.1.8            -> 'wpng_byte[max_keyword_wbytes]'
+  #   oss-fuzz base-builder clang  -> 'wpng_byte[max_keyword_wbytes]'
+  #     (22.0.0git, cb2f0d0a5f14c183e7182aba0f0e54a518de9e3f)
+  # Neither emits the space. Both agree, so this is not a toolchain split.
+  #
+  # STILL FRAGILE, and deliberately not papered over: this is a literal match on
+  # compiler-formatted text, so a clang that reformats array types breaks it again
+  # and breaks it silently. Making the comparison whitespace-insensitive would fix
+  # the recurrence and weaken every other case's check, which is a decision worth
+  # taking on its own rather than as a side effect of this one.
+  expected_sanitizer: "runtime error: index 41 out of bounds for type 'wpng_byte[max_keyword_wbytes]'"
+  # Both sanitizers agree on the site, which is what the crash-site matcher
+  # compares. UBSan's SUMMARY line carries no function name, but its stack frames
+  # do, and ParseReportSites reads frames as well as summaries — a fallback
+  # written for inlining that happens to cover this case. Luck, not design.
+  # Under --sanitizer address the same defect reports as
+  # "AddressSanitizer: dynamic-stack-buffer-overflow pngrutil.c:1447:10 in
+  # png_handle_iCCP". Prose, not a key: PoV has no field for it, and Load would
+  # reject the file outright if it were one.
+  crash_location: "png_handle_iCCP pngrutil.c:1447"
+  signal: stderr
+
+# Run 1's patch. It restores libpng's own declaration, so it is equivalent to
+# reverting the injection rather than merely equivalent in effect.
+reference_patch: corpus/falsifying-class/libpng-iccp/run1.patch
+
+falsifying_class:
+  description: >-
+    Any PNG carrying an iCCP chunk, over the range of keyword lengths PNG
+    permits. The injected bug is in the scan for the keyword terminator, so the
+    class is ordinary valid input rather than malformed input.
+  generator: corpus/falsifying-class/libpng-iccp/mkpng.py
+  # The fuzz harness cannot carry this class's discriminator: libpng_read_fuzzer
+  # discards diagnostics, so replaying through it compared silence against
+  # silence and accepted the known-incomplete fix across all 79 members.
+  observer: corpus/falsifying-class/libpng-iccp/observe.sh
+  discriminator: >-
+    Whether libpng reports the PARSED KEYWORD. A build that scans the terminator
+    correctly names it ("profile '<keyword>'") and goes on to validate the
+    profile; a build that mis-parses it never reaches that point. Accept/reject
+    alone does not separate them, because both end up rejecting this particular
+    profile.
+
+    NOT the wording of the failure. This discriminator was keyed to "bad
+    compression method" until 2026-08-11, which is what gcc builds print. clang
+    builds print "incorrect header check" for the same rejection, and a third
+    run printed "invalid window size" because mkpng.py is not deterministic and
+    each payload fails zlib differently. The message varies with the toolchain
+    AND with the input; only whether the keyword was parsed varies with the
+    patch. A discriminator keyed to a diagnostic string measures the build, one
+    keyed to an observable measures the patch.
+
+  # Preconditions of the generator, both re-derivable and both properties of
+  # THIS target. Recorded because a mechanically derived class inherits the arm
+  # choice, and without these it inherits it without the reason.
+  # preconditions:
+  # parse_precedes_integrity_check: >-
+  # png_crc_read accumulates while reading the keyword at pngrutil.c:1429 and
+  # png_crc_finish verifies at 1442, AFTER the changed line. A broken CRC is
+  # therefore noticed too late to stop the parse, which is why naive byte
+  # mutation reaches the changed lines at all (317 of 500). A format that
+  # rejects on checksum first would need a structure-aware mutator.
+  # chunk_size_distribution: >-
+  # iCCP is 424 of 449 data bytes, 94.4%. Byte-uniform mutation lands there
+  # about 94% of the time and leaves the 13-byte IHDR intact; chunk-uniform
+  # picks IHDR a third of the time and corrupts the header before iCCP is
+  # reached (51 of 500). Byte-uniform wins HERE because the interesting chunk
+  # is the biggest one, which is a property of this seed and inverts on a
+  # target whose changed lines sit in a small chunk.
+  # derived_generator: >-
+  # corpus/falsifying-class/libpng-iccp/mutate-class.py produces the class by
+  # mutating the PoV rather than by construction, using only the diff, the
+  # PoV, the format spec and a coverage probe. 317 of 500 reach the changed
+  # line and 256 separate run 2 from run 1, with zero members on which
+  # the reference fix fails where run 2 succeeds. mkpng.py remains the declared
+  # generator because it is deterministic in structure; the mutation route is
+  # what shows the class can be derived without understanding the bug.
+  #
+candidates:
+  - id: libpng-iccp-buttercup-run1
+    patch: corpus/falsifying-class/libpng-iccp/run1.patch
+    label: good
+    expected_gate_reason: null
+
+  - id: libpng-iccp-buttercup-run2
+    patch: corpus/falsifying-class/libpng-iccp/run2.patch
+    label: incomplete-fix
+    # Caps read_length at the element count, which does stop the overflow, and
+    # leaves the png_uint_16 array in place. png_crc_read still fills it through
+    # a png_bytep cast, so keyword[i] compares two packed characters against
+    # zero and the terminator is only found on a zero pair. Memory-safe, and it
+    # removes iCCP support: every keyword length from 1 to 21 characters failed
+    # identically over five repeats.
+    #
+    # M1 credits this patch, because the proof of vulnerability stops
+    # reproducing. M3 passes it, because the build is sanitizer-clean. Only the
+    # class replay separates it from run 1.
+    expected_gate_reason: class-replay-fail

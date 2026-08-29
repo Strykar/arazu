@@ -1,0 +1,65 @@
+# build outputs
+/bin/
+*.o
+# `go build ./cmd/gate` writes ./gate rather than into bin/, and a blanket
+# `git add -A` tracked 5.5MB of it once. The Makefile builds into bin/; these are
+# the ad-hoc ones.
+/gate
+/demo
+/ingress-verify
+/contained-run
+/seal-tool
+/log-verify
+/drive
+/dossier
+/keygen
+/bundle-sign
+/arazu-env
+/mutation-test
+# cmd/corpus is deliberately absent: a tracked corpus/ directory already holds
+# that name, so `go build ./cmd/corpus` refuses rather than writing a binary,
+# and /corpus here would ignore 75 tracked files.
+bpf/vmlinux.h
+bpf/*.bpf.o
+
+# compiled python from the corpus helpers; six .pyc files were tracked and
+# shipped in the archive, and they are version- and machine-specific.
+__pycache__/
+*.pyc
+
+# generated fixtures (produced by scripts/make-bundle.sh and make-adversarial.sh)
+testdata/bundles/
+
+# runtime state (last-accepted version, audit logs, unsealed material)
+state/
+
+# secret keys are fixtures for the spike and ARE committed under testdata/keys/
+# (deterministic test keys, not production material) — nothing to ignore there
+
+# run artifacts: everything below is produced by re-running a harness, and the
+# reasoning that cannot be re-derived lives in the hand-written .yaml and .md
+# files beside them, which ARE tracked.
+logs/
+corpus/reports/*.jsonl
+corpus/reports/*.log
+corpus/reports/runs/
+corpus/reports/m1-decisions/
+corpus/reports/m1-regrade/
+corpus/reports/candidates/
+corpus/reports/asan/
+corpus/reports/matrix*.json
+corpus/reports/grader-calibration.json
+corpus/reports/m0-nginx.json
+
+# mkosi build outputs. These were tracked, and the three selfcheck artifacts
+# alone were 464MB of the 466MB export tarball. They are rebuilt by
+# `mkosi --force build` in ci/uki and belong on a stick, not in history.
+ci/uki/arazu-*.efi
+ci/uki/arazu-*.initrd
+ci/uki/arazu-*.vmlinuz
+ci/uki/arazu-selfcheck
+ci/uki/arazu-coldrun
+drafts/email-*.md
+
+# local notes, research and the competition submission. never upstream.
+notes/

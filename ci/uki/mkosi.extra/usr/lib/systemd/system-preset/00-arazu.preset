@@ -1,0 +1,5 @@
+enable arazu-selfcheck.service
+enable systemd-networkd.service
+enable systemd-resolved.service
+enable systemd-networkd-wait-online.service
+enable getty@tty2.service

@@ -1,0 +1,162 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Filed BEFORE pointing the CRS at a local backend. Item 23's pre-travel task.
+#
+# THE GAP THIS CLOSES. The yield work drove ollama directly and never went
+# through Buttercup's patcher; Buttercup's patcher has never been pointed at a
+# local backend. So "local model reachable" -> "Buttercup's patcher succeeds
+# against it" is untested in BOTH directions. The prefill 400 established the
+# principle: reachability proves nothing about capability.
+written: 2026-08-21
+by: the build, before the run
+
+# Two failure modes found by inspection BEFORE the run, so they are preconditions
+# rather than predictions. Recorded because either would present as "the local
+# model is not good enough" when neither is about the model.
+preconditions_found_by_inspection:
+  bind_address:
+    observed: "ss shows ollama LISTEN 127.0.0.1:11434 only"
+    consequence: >-
+      minikube pods reach the host at 192.168.49.1. Loopback-only means every
+      call fails to connect. BUTTERCUP.md already warns about this.
+    fix: OLLAMA_HOST=0.0.0.0 before the run
+  context_window:
+    observed: >-
+      gpt-oss:20b has no num_ctx in its Modelfile, so ollama uses its 4096
+      default, while the architecture supports 131072.
+    consequence: >-
+      the patcher's prompts measured 38715 tokens on the yield run. At 4096 the
+      prompt is TRUNCATED, and a truncated prompt produces a confident wrong
+      answer rather than an error. This is the one that would be misread as the
+      model being incapable.
+    fix: a derived model with num_ctx set, as the yield work used
+
+predictions:
+
+  prefill_is_not_the_failure:
+    predict: no prefill 400 against ollama
+    confidence: high
+    reasoning: >-
+      ollama's /v1 endpoint is OpenAI-shaped, and OpenAI accepts a trailing
+      assistant message. The refusal was an Anthropic-side constraint on 4.6+
+      models, not a property of prefilling.
+    what_would_falsify: any 400 naming prefill from the local endpoint.
+
+  it_fails_in_its_own_way_instead:
+    predict: yes, and NOT for a reason on this list
+    confidence: medium
+    reasoning: >-
+      every backend swap in this project has failed at a layer below the one
+      being changed. Routing was correct and the semantics broke; here the
+      preconditions are known and something else will be wrong.
+    pre_decision: >-
+      whatever it is gets NAMED and recorded before being fixed, and the fix
+      goes in the script rather than in a shell history.
+
+  a_patch_is_emitted:
+    predict: PROBABLY NOT on the first attempt
+    confidence: low
+    reasoning: >-
+      the yield work measured 21 apply failures against this class of model, 14
+      fabricated context and 7 bare @@ headers. The patcher post-processes, which
+      narrows it, but a 20B model on one workstation is not claude-sonnet.
+    what_this_run_actually_tests: >-
+      NOT yield. Whether the patcher completes a full loop against a local
+      endpoint without an infrastructure failure. A completed loop that produces
+      no patch is a PASS for this run's purpose.
+
+  what_it_cannot_settle:
+    - a rate. One task, one model.
+    - whether a different local model does better. Out of scope today.
+
+# ---------------------------------------------------------------------------
+# OUTCOME, 2026-08-21. Task 6bdd3b60-5d33-44a8-8863-f6988d0c35da. Appended.
+
+prefill_is_not_the_failure_result:
+  predicted: no prefill 400 against ollama
+  observed: none. The endpoint accepted a trailing assistant turn.
+  verdict: HELD. The Anthropic 400 was a model-family constraint, not a
+    property of prefilling.
+
+it_fails_in_its_own_way_instead_result:
+  predicted: yes, and NOT for a reason on the precondition list
+  observed: >-
+    litellm.InternalServerError, "Connection error", Model Group openai-gpt-4.1.
+    The host firewall's catch-all `reject with icmpx admin-prohibited` near the
+    end of the input chain refused the bridge subnet. Binding ollama to the
+    bridge was necessary and NOT sufficient.
+  verdict: HELD, and the reason was already documented in this repository.
+  what_it_cost: >-
+    scripts/r14-probe.sh already adds the nft rule AND the bind, and removes
+    both in an EXIT trap. BUTTERCUP.md's local-mode output names it. I read that
+    sentence aloud and treated it as background rather than as the answer, then
+    built a permanent systemd drop-in covering half of what the script does. The
+    script's own header says why permanent is wrong: "a rule that has to be
+    remembered is a rule that quietly becomes permanent -- and then the
+    deployment story depends on a host configuration that does not ship to the
+    organisers' hardware." My drop-in is removed; the probe manages both.
+  the_rule_detail_that_matters: >-
+    an APPENDED accept never matches, because the reject sits near the end of
+    the chain. It must be INSERTED, mirroring the libvirt "VM to Ollama
+    Override" already near the top.
+
+a_misattribution_i_made_and_corrected:
+  claim: "ollama ps showed the model loaded, so the CRS is driving it"
+  why_it_was_wrong: >-
+    a smoke-test curl from the HOST loads the model identically. A loaded model
+    is consistent with "CRS reached it" and "CRS never reached it", so the
+    observation had no power to separate them. The discriminating check is from
+    inside the pod, and it said "No route to host".
+  what_settles_it_now: >-
+    the patcher log shows agent tool calls, "Getting lines 220-260 of
+    pngread.c". A curl cannot produce those. The CRS is driving the model.
+
+patcher_completes_a_loop_against_a_local_backend:
+  observed: yes. Zero ERROR lines, agent loop retrieving source and iterating.
+  verdict: >-
+    THE GAP ITEM 23 NAMED IS CLOSED IN BOTH DIRECTIONS. Reachability was already
+    measured; capability now is. Whether it produces a USABLE patch is separate
+    and was predicted as probably not first time.
+
+# ---------------------------------------------------------------------------
+# PRE-DECISION, taken 10:15 for a boundary at 10:36:21, deliberately NOT at the
+# boundary. Deciding with a loop mid-flight is when "just a bit longer" wins and
+# the record of which outcome it was gets lost.
+
+the_exposure_boundary:
+  when: 10:36:21 IST. The probe's sleep began 09:51:21 with a 2700s window.
+  what_happens: >-
+    the EXIT trap deletes the nft rule, removes the drop-in, and runs
+    `systemctl restart ollama`. Any generation in flight dies with it.
+  can_it_be_extended: >-
+    NO, and this is decided by mechanics rather than by judgement. Killing the
+    probe fires the same trap. Leaving the window open defeats the disposability
+    the script exists to provide, and its header says why: a rule that has to be
+    remembered becomes permanent, and then the deployment story depends on host
+    configuration that does not ship to the organisers' hardware.
+
+decision: accept the cut.
+reasoning: >-
+  the question this run was launched to answer is already answered. The
+  patcher completes its agent loop against a local backend with zero errors,
+  retrieving source and iterating. Item 23's gap was reachability versus
+  capability, and capability is now observed. Whether THIS attempt yields a
+  usable patch is the yield question, which needs a matrix rather than n=1, and
+  was filed in advance as probably-not-first-time.
+
+how_a_cut_gets_recorded:
+  rule: >-
+    if the run has not terminated by 10:36:21 it is an ARTIFICIAL CUT, not a
+    model result, and the record says so in those words.
+  why_it_matters: >-
+    a run killed by my own timer and a run that failed to produce a patch leave
+    IDENTICAL artifacts: a pov, no patch. That is crs-no-patch again, one layer
+    out. The directory cannot say which, so the reason has to be written down at
+    the time by the only party that knows, which is me, now, before it happens.
+  what_it_must_not_become: >-
+    evidence about local-model capability, in either direction.
+
+a_rerun_is_a_separate_decision: >-
+  it costs no credit, only wall clock and the operator's machine. Worth doing
+  with a window sized from this run's observed pace rather than a guess, but it
+  is the operator's call and not a continuation of this one.

@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Filed BEFORE the first end-to-end run, so a surprise is a finding rather than
+# something absorbed while reading output. Same discipline as m1-predictions.
+#
+# This is the first time the gate stages meet the sealing path in one process
+# tree. cmd/demo already chains ingress -> seal provision -> contained run ->
+# sign -> log-verify, and has never had a gate verdict in the middle of it.
+written: 2026-08-19
+by: the build, before the run
+
+# ---------------------------------------------------------------------------
+# WHAT IS BEING RUN
+#
+#   scripts/buttercup-task.sh  submit the libpng case to the CRS
+#   pkg/crsout.Capture         the run's output -> a kind:captured case
+#   gate -stage m1             revert-to-attribute on the captured candidate
+#   gate -stage m3             sanitizer-gated reachability on the same
+#   seal-tool / log-verify     the envelope, as cmd/demo already exercises it
+#
+# The captured case carries no reference_patch and no expected_gate_reason, so
+# M0/M1/M3 are the only stages that can run against it. That is the point: it
+# is the reference-free subset on a case nobody hand-authored.
+
+# ---------------------------------------------------------------------------
+# THREE PREDICTIONS. Each is falsifiable and none is a restatement of the code.
+
+gate_verdict:
+  case: the captured libpng run, whatever the CRS produces
+  predict: REJECT, reason class-replay-fail is NOT available
+  reasoning: >-
+    M2 cannot run on a captured case, so if the candidate is run 2's shape the
+    gate will NOT catch it. M1 credits it (the PoV stops reproducing) and M3
+    passes it (no new sanitizer finding, the incomplete fix introduces nothing).
+    The expected verdict on run-2-like output is therefore ACCEPT, and that is
+    the honest, uncomfortable prediction: the reference-free subset does not
+    catch an incomplete fix. If it comes back REJECT, something is wrong with
+    the prediction or a stage is firing for a reason nobody intended.
+  what_would_falsify: >-
+    a REJECT whose reason is not patch-does-not-apply. That would mean a stage
+    refused for a reason this reasoning did not anticipate, and the reason is
+    the finding.
+
+sealed_output:
+  predict: the content root sealed equals the digest of the bundle the gate accepted
+  reasoning: >-
+    seal-tool binds to a content root computed by contentstore over the bundle.
+    With a gate decision now in the chain, the risk is that the decision is
+    written into the bundle AFTER the root is computed, so the seal binds a tree
+    that does not include the verdict. Nothing tests that ordering today.
+  what_would_falsify: >-
+    unsealing succeeds but the bundle contains a decision.json whose hash is not
+    under the sealed root. That is silent: both halves look correct alone.
+
+audit_log:
+  predict: log-verify passes, and the chain contains one entry per gate stage run
+  reasoning: >-
+    auditlog hashes each entry against the previous. Gate stages currently do
+    not append, so either they must, or the log will show the envelope events
+    with no record that a verdict was reached. The second is worse than a
+    failure, because the log would look complete.
+  what_would_falsify: >-
+    log-verify passes while the log has no gate entry. A passing verifier over
+    an incomplete record is exactly the failure this project keeps finding.
+
+# ---------------------------------------------------------------------------
+# PRE-DECISION, taken now rather than after the numbers.
+#
+# If the captured case turns out ungradable for a reason crsout does not name
+# — anything that is not one of crs-no-run, crs-no-patch, crs-no-pov,
+# crs-unpairable, crs-malformed-artifact, crs-no-sanitizer-report — then the
+# outcome vocabulary is incomplete and gets a new name before the run is
+# repeated. Widening an existing name to cover it would hide the case.
+#
+# If the gate accepts a run-2-shaped patch, that is NOT a bug to fix in the
+# gate. It is the measured cost of having no reference, it belongs in SCOPE.md
+# beside the M3 n=1 note, and it is the argument for M2 on the corpus and M4
+# after it.
+
+# ---------------------------------------------------------------------------
+# OUTCOME, 2026-08-19. Two of three answered WITHOUT a live CRS run, by reading
+# the tree. Recorded here rather than by editing the predictions above, because
+# a prediction rewritten to match its result is not a prediction.
+
+sealed_output_result:
+  verdict: FALSIFIED, and worse than the failure mode predicted
+  found: >-
+    cmd/gate imported corpus, model, gate, revert and sanitizer. Not contentstore,
+    not manifest, not auditlog. emitDecision marshalled to stdout and set an exit
+    code. There was no decision.json sitting outside the root — there was no
+    decision artifact at all, so the deck's "evidence dossier, signed and
+    recorded" had no emitter behind it.
+  fixed_by: >-
+    cmd/gate/persist.go writes decision.json INTO the bundle, so the existing
+    ContentRoot covers it with no change to the manifest format. Order is the
+    whole risk and nothing in the type system enforces it, so
+    TestMeasuringBeforeWritingLeavesTheVerdictUnbound states it as a test.
+
+audit_log_result:
+  verdict: FALSIFIED, exactly as the falsifier was written
+  found: >-
+    the gate never appended, so a run produced a hash-chained log that verifies
+    clean and contains no evidence a verdict was reached. The predicted falsifier
+    was "log-verify passes while the log has no gate entry", and that was the
+    state of the tree.
+  fixed_by: >-
+    GATE_ACCEPT, GATE_REJECT and GATE_ERROR events, with the reason in the
+    detail. An unwritable log is reported rather than swallowed: the gate is the
+    thing whose verdict the log exists to record.
+
+gate_verdict_result:
+  verdict: STILL OPEN
+  why: >-
+    the only one of the three that needs a live CRS. Verifying the other two
+    locally first was the right order: both were plumbing, both were free to
+    check, and finding them during the live run would have made the failure look
+    like the CRS join.

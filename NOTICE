@@ -1,0 +1,15 @@
+Arazu
+Copyright 2026 Avinash Duduskar <avinash.duduskar@gmail.com>
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+EXCEPTION. bpf/egress_deny.bpf.c is GPL-2.0. It declares
+char LICENSE[] SEC("license") = "GPL" to the kernel, and the verifier refuses a
+non-GPL program the helpers this LSM uses. Compiled to an object the kernel
+loads; not linked into any Go binary here.
+
+THIRD PARTY. Go dependencies are listed in go.mod and vendored under vendor/,
+each under its own licence. Not covered by this NOTICE.
+
+Buttercup (github.com/trailofbits/buttercup, AGPL-3.0) is run as a separate
+service over HTTP. No Buttercup code is in this repository.

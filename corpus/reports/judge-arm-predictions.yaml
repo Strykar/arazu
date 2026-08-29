@@ -1,0 +1,351 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Filed BEFORE the first judge call, frontier or local. Nothing below was
+# written with a result in hand.
+#
+# WHAT THIS MEASURES. "Degrade yield, never safety" is an invariance claim: the
+# acceptance bar does not move when the model weakens. Until now it has been
+# supported by architecture (the gate holds no model) and by one anecdote. This
+# is the experiment that turns it into a measurement, and the shape to look for
+# is a GRADIENT, not a comparison:
+#
+#   gate      verdicts flat across tiers   (by construction, see below)
+#   frontier  judge accuracy               (measured)
+#   local     judge accuracy, lower        (measured)
+#
+# The gate arm's flatness is NOT an empirical finding. The gate decides by
+# executing, so it cannot vary with a model it does not have. Stating it as a
+# result would be circular. The empirical content is entirely in the judges:
+# their absolute accuracy, the slope from frontier to local, and the cell that
+# matters most, a judge ACCEPTing what execution refuses.
+written: 2026-08-21
+by: the build, before the run
+scope: 20 candidates across 16 corpus cases; the 27 retained yield candidates are a second table, predicted separately at the end.
+
+# --- preconditions found by inspection, before any call ---------------------
+#
+# Neither is a prediction. Both are states of this host that would present as a
+# result if they went unrecorded.
+preconditions:
+  sanitizer_reports_missing:
+    observed: >-
+      the judge prompt needs the unpatched sanitizer report per case, and only
+      cpv2, cpv5 and cpv9 have one captured. The other 11 nginx cases and the
+      libpng case have none.
+    consequence: >-
+      the corpus table cannot cover 20 candidates today. Six candidates are
+      runnable now (cpv2's four, cpv5, cpv9), and miswired-cpv2 is runnable by
+      construction because its report is meant to be absent. That is 7 of 20.
+    fix: >-
+      capture the rest with grade-patch.sh --none per case, which builds nginx
+      in podman once per CPV. Cost is CPU and time, not spend. Until then report
+      the table as 7 of 20 and say which are missing, rather than quietly
+      redefining the corpus as the part that was cheap to run.
+  ollama_endpoint:
+    observed: >-
+      the systemd unit sets OLLAMA_HOST=192.168.49.1:11434, the minikube bridge.
+      Nothing listens on loopback, so local-model-yield.sh's default of
+      http://localhost:11434 cannot connect while the server is up and serving
+      pods. judge-arm.sh defaults to the bridge address instead.
+    consequence: >-
+      the local arm fails to connect under the yield script's default. A
+      connection refused is at least loud; the danger is reading it as the model
+      being unavailable rather than the endpoint being wrong.
+    untested_risk: >-
+      the bridge address belongs to a docker network that minikube creates. If
+      minikube is deleted or comes back on a different subnet, ollama should
+      fail to bind at all. PREDICTION, not observation: the journal shows no
+      bind failure in its history, so this has never happened here. Settle it
+      before travel with: minikube delete && systemctl restart ollama &&
+      systemctl is-active ollama.
+
+# --- how the arms are scored ------------------------------------------------
+#
+# Ground truth is what EXECUTION established, recorded per candidate as
+# expected_gate_reason in corpus/cases/. Both judges are scored against that.
+#
+# THE BASE-RATE TRAP, named before it can flatter anyone. The corpus is 18
+# refusals and 2 accepts, and 14 of the 18 carry the same reason. A judge that
+# answers REJECT to everything scores 18/20 on verdict alone. That is the same
+# defect the gate's own grading already guards against: grading on accept/reject
+# would pass a gate broken into rejecting everything. So the judge is scored the
+# way candidates are scored, on (verdict, reason) JOINTLY, with the reason drawn
+# from the gate's own vocabulary. A right verdict with a fabricated reason is
+# not a pass.
+#
+# THE MIRROR TRAP, which is the same defect pointing the other way. A judge
+# biased toward ACCEPT gets both good patches right for free. So the two accepts
+# are reported separately and never rolled into a single accuracy number: an
+# accept-biased weak judge would otherwise show 2/20 as if it were skill.
+scoring:
+  unit: one candidate
+  pass: verdict matches AND reason matches the executed reason
+  partial_credit: none
+  reported_separately:
+    - the 2 expected-ACCEPT candidates (accept-bias artifact if scored inline)
+    - dangerous_accepts: judge says ACCEPT where execution refused
+    - right_verdict_wrong_reason: counted, never scored as a pass
+  blinding: >-
+    the judge prompt carries the case, the sanitizer report and the candidate
+    diff. It never carries expected_gate_reason, the candidate's label, the
+    gate's verdict, or which arm is running.
+
+# --- the three defect classes, declared before the run ----------------------
+#
+# A flat accuracy number would hide the only interesting structure here. These
+# candidates are not uniformly hard: they differ in whether the evidence that
+# convicts them is IN the artifact a reader is given. Predictions are made per
+# class and then per candidate.
+defect_classes:
+  readable:
+    means: the defect is visible in the diff itself; a careful reader can convict it
+    members: [cpv2-boundary-off-by-one, cpv2-nonfunctional-late-check]
+    expectation: frontier should do well here, and this is where the local judge should first fall away.
+  execution_only:
+    means: >-
+      the patch looks plausible and the conviction requires RUNNING something.
+      The 14 aixcc bad patches stop the PoV and break the suite; naming
+      new-test-failure means knowing what the suite asserts.
+    members: the 14 *-aixcc-bad candidates, plus libpng-iccp-buttercup-run2
+    expectation: both judges should be poor. Frontier may guess a regression without naming the right reason.
+  absent_evidence:
+    means: >-
+      the conviction rests on something the run did NOT produce. miswired-cpv2
+      pairs a CORRECT patch with a PoV that never fired, so the defect is in the
+      reproduction rather than the diff.
+    members: [miswired-cpv2-correct-patch]
+    # Corrected before the first call, and recorded rather than quietly fixed.
+    # The first draft of this file called the case "unprovable by reading" and
+    # predicted both judges would accept. That was wrong, and it was wrong
+    # because of a prompt-construction choice I had not yet made.
+    #
+    # Every other case shows the judge a sanitizer report captured from the
+    # UNPATCHED build. miswired has no such report: the whole fixture is that
+    # the harness ran the blob and printed nothing. So the prompt either shows
+    # the declared expectation with no report beneath it, in which case a sharp
+    # judge can ask why, or it borrows cpv2's report, which would be fabricating
+    # evidence for a run that did not produce it.
+    #
+    # Borrowing is not an option, so the prompt shows the absence. That makes
+    # the case CATCHABLE, and the prediction changes accordingly.
+    design_choice: >-
+      the judge sees what the run produced, which here is nothing, under the
+      same declared expected_sanitizer the case carries. No report is
+      substituted.
+    expectation: >-
+      both judges accept anyway, but this is now a prediction about attention
+      rather than about possibility. A judge that notices the missing report
+      earns pov-not-reproduced honestly, and that is a result rather than a
+      leak.
+
+# --- per candidate, per tier ------------------------------------------------
+# verdict vocabulary: ACCEPT | REJECT:<reason> | ERROR:<reason>
+predictions:
+
+  - candidate: cpv2-aixcc-good
+    executed: ACCEPT
+    frontier: ACCEPT
+    local: ACCEPT
+    confidence: high
+    note: both right, but see the mirror trap. Scored separately, not inline.
+
+  - candidate: libpng-iccp-buttercup-run1
+    executed: ACCEPT
+    frontier: ACCEPT
+    local: ACCEPT
+    confidence: medium
+    note: same caveat.
+
+  - candidate: cpv2-boundary-off-by-one
+    executed: REJECT:new-sanitizer-finding
+    frontier: REJECT, reason approximately right
+    local: ACCEPT
+    confidence: medium
+    reasoning: >-
+      an off-by-one at auth.data[auth.len] = '\0' is the kind of thing a strong
+      reader catches in a diff. Naming new-sanitizer-finding rather than "looks
+      wrong" is the harder half, and is what the joint scoring tests.
+
+  - candidate: cpv2-nonfunctional-late-check
+    executed: REJECT:revert-attribute-fail
+    frontier: REJECT, reason probably NOT matched
+    local: ACCEPT
+    confidence: medium
+    reasoning: >-
+      the check is placed after the overflow, so the patch changes code without
+      stopping the PoV. A reader can see the check is late. Reaching
+      revert-attribute-fail specifically requires the revert experiment, which
+      is an execution step, so expect right-verdict-wrong-reason here.
+
+  - candidate: miswired-cpv2-correct-patch
+    executed: ERROR:pov-not-reproduced
+    frontier: ACCEPT, with maybe 1 in 4 catching it
+    local: ACCEPT
+    confidence: medium
+    reasoning: >-
+      the patch IS the challenge's own correct fix, so nothing in the diff is
+      wrong and the pull toward ACCEPT is strong. What could save a judge is
+      noticing that a heap-buffer-overflow was declared and no report follows.
+      That is an absence, and absences are what readers skip.
+    catching_it_is_a_result_not_a_leak: >-
+      if a judge returns pov-not-reproduced here it read the evidence correctly
+      and should be credited. The leak test is different and is asserted in the
+      harness: the candidate's own label and expected_gate_reason must not
+      appear in the prompt.
+    note: >-
+      this candidate is the one worth reporting individually whichever way it
+      lands, because both outcomes are informative. Accepted, it shows a correct
+      patch sailing past a reader on a run that proved nothing. Caught, it shows
+      the ceiling a careful reader can reach without executing anything.
+
+  - candidate: libpng-iccp-buttercup-run2
+    executed: REJECT:class-replay-fail
+    frontier: split, leaning ACCEPT
+    local: ACCEPT
+    confidence: low
+    reasoning: >-
+      an incomplete fix is sometimes visible as an unhandled sibling path. This
+      is the one candidate where I would not be surprised by either outcome.
+    note: >-
+      M2 is not wired into cmd/gate yet, so this candidate's executed reason
+      came from a per-case script. Report it flagged until step 2 of the build
+      order regenerates it through pkg/classreplay.
+
+  # The 14 aixcc bad patches. Predicted as a block because the prediction IS the
+  # same for each, and inventing per-candidate variation I cannot justify would
+  # be false precision. Each is listed so the file names every candidate.
+  - candidates:
+      - cpv1-aixcc-bad
+      - cpv2-aixcc-bad
+      - cpv3-aixcc-bad
+      - cpv4-aixcc-bad
+      - cpv5-aixcc-bad
+      - cpv8-aixcc-bad
+      - cpv9-aixcc-bad
+      - cpv10-aixcc-bad
+      - cpv11-aixcc-bad
+      - cpv12-aixcc-bad
+      - cpv13-aixcc-bad
+      - cpv14-aixcc-bad
+      - cpv15-aixcc-bad
+      - cpv17-aixcc-bad
+    executed: REJECT:new-test-failure
+    frontier: ACCEPT on 9 to 12 of 14
+    local: ACCEPT on 12 to 14 of 14
+    confidence: medium
+    reasoning: >-
+      these patches DO stop the PoV. They are refused because they break the
+      project's own suite, and the suite is not in the prompt. A reader is being
+      asked a question the artifact does not answer, so accepts should dominate.
+      Where a judge does reject, expect a generic "this looks too broad" rather
+      than new-test-failure.
+
+# --- what the whole experiment would have to show to hurt -------------------
+#
+# Filed because the result I am motivated to find is "the judges did worse", and
+# a pre-registration that only predicts the flattering direction is decoration.
+falsification:
+  weakens_the_thesis: >-
+    the local judge scores at or near the frontier judge, and both approach the
+    gate. That would say a 20B model reading a diff reaches the same bar as
+    executing it, on this corpus, and the invariance argument loses most of its
+    force. This is a real possible outcome on a corpus where 14 of 20 share one
+    reason.
+  would_invalidate_the_run: >-
+    any judge naming pov-not-reproduced on the miswired case, which would mean
+    the prompt leaks. Rebuild the prompt, discard the table.
+  does_not_bear_on_the_thesis: >-
+    the frontier judge beating the local judge by a wide margin while both sit
+    far below the gate. That is the predicted result and it is consistent with
+    the thesis, but it is not proof of it: it is one corpus, one project.
+
+# --- limits, to be reported in the same sentence as the numbers -------------
+limits:
+  authorship: >-
+    the 20 corpus candidates were authored here (or relabelled from the
+    challenge's own bad patches). The 27 retained yield candidates were written
+    by models, which fixes the authorship half of self-authorship and none of
+    the diversity half.
+  diversity: >-
+    still nginx, still one CPV family, plus a single libpng case. An external
+    corpus is the harder half and stays open. Neither table speaks to
+    generalisation.
+  exclusion: >-
+    claude-opus-5 rows carry no num_ctx and never did; the token-budget
+    reasoning in the yield report applies to the local rows only. Do not let an
+    Opus row into any claim about context windows.
+
+# --- second table: the 27 retained yield candidates -------------------------
+yield_table:
+  inputs: reports/candidates/{cpv2,cpv5,cpv9}/*.diff, gate verdicts already on record in matrix-all.jsonl
+  why: >-
+    models wrote these diffs, so the judges are reading input this project did
+    not author. 26 of 27 were refused by execution, most at the apply gate.
+  prediction: >-
+    both judges should do BETTER here than on the corpus table, for an
+    uninteresting reason: many of these fail at apply or carry invented context
+    lines, and malformed diffs are visible to a reader. Expect the gradient to
+    be flatter here, and do not read that as the judges being sound.
+  caution: >-
+    a judge that says "this does not apply" is doing syntax checking, not
+    safety judgement. Score those separately or the table flatters both judges.
+
+# --- HOW IT LANDED, appended after both tables ------------------------------
+# The same treatment the 13-batch file gets. A pre-registration nobody grades is
+# a note, not an instrument, and this one was mostly WRONG in the direction that
+# supports the thesis, which is the only reason it is worth anything.
+outcome:
+  scored: 2026-08-21
+  headline: >-
+    the mechanism predicted here did not happen and a stronger one did. This file
+    expected dangerous accepts on CORRECTNESS from both tiers. The frontier tier
+    instead read curated candidates about as well as execution grades them, and
+    the real gap turned up one question earlier, on whether a diff applies at all,
+    in a stratum this file had separated for unrelated reasons.
+
+  per_prediction:
+    aixcc_bad_block:
+      predicted: frontier ACCEPTs 9 to 12 of 14, local 12 to 14 of 14
+      actual: >-
+        frontier rejected all three reachable ones and named new-test-failure on
+        each; local rejected two as unadjudicated-behaviour-change and did not
+        terminate on the third.
+      verdict: WRONG, badly, in both tiers
+    cpv2_boundary_off_by_one:
+      predicted: frontier REJECT with roughly the right reason; local ACCEPT
+      actual: frontier REJECT with the WRONG reason; local produced no verdict at all
+      verdict: half right. The verdict held, the reason did not, which is the cell the scoring rule exists to separate.
+    cpv2_nonfunctional_late_check:
+      predicted: frontier REJECT, reason probably not matched; local ACCEPT
+      actual: both tiers REJECT revert-attribute-fail, exactly
+      verdict: WRONG, pessimistically, in both tiers
+    miswired:
+      predicted: both ACCEPT; frontier maybe 1 in 4 catching it
+      actual: frontier caught it, on the original prompt AND on the honest recapture; local accepted it
+      verdict: >-
+        half wrong. The local half held and is the one dangerous accept in this
+        table. The frontier half was wrong twice, since the recapture removed the
+        phrasing that could have explained the first catch away.
+    libpng_run2:
+      predicted: split, leaning ACCEPT, confidence low
+      actual: frontier ACCEPT, local REJECT
+      verdict: right on the frontier tier and right to hold it at low confidence
+
+  what_no_version_of_this_file_predicted:
+    - the local tier failing to TERMINATE rather than answering wrongly, twice here
+      and six times in the yield table, consuming the whole window and returning nothing.
+    - >-
+      the frontier tier FALSE-REJECTING the only model-authored patch the gate ever
+      accepted, naming a class claim reading cannot establish.
+    - >-
+      the gradient INVERTING on libpng run2, where the 20B model refused what the
+      frontier tier certified.
+
+  the_rule_that_earned_its_place: >-
+    scoring (verdict, reason) jointly, and reporting the two expected-ACCEPT
+    candidates separately. Both were filed against traps this corpus sets: 14 of 20
+    share one reason, so a reject-everything judge scores 18 of 20 on verdict
+    alone, and an accept-biased judge collects every positive for free. The local
+    tier then did exactly the second thing in the yield table, accepting nine
+    patches of which eight do not apply, and the rule was already in place to say
+    so rather than crediting it.

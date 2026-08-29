@@ -1,0 +1,18 @@
+--- a/pngrutil.c
++++ b/pngrutil.c
+@@ -1419,5 +1419,13 @@
+    if ((png_ptr->colorspace.flags & PNG_COLORSPACE_HAVE_INTENT) == 0)
+    {
+       uInt read_length, keyword_length;
+-      uInt max_keyword_wbytes = 41;
+-      wpng_byte keyword[max_keyword_wbytes];
++      /* The iCCP keyword can be up to 79 bytes long.  The keyword is
++       * followed by a null byte and a compression method byte, so we need
++       * to read at least 81 bytes (79 + 1 + 1).  The original code used a
++       * buffer of 41 bytes, which caused a buffer overflow when a longer
++       * keyword was encountered.  Increase the buffer size to 81 to
++       * accommodate the maximum keyword length plus the null and
++       * compression method bytes.  This also fixes the sanitizer
++       * complaint about an out‑of‑bounds index 41. */
++      uInt max_keyword_wbytes = 81;
++      wpng_byte keyword[max_keyword_wbytes];

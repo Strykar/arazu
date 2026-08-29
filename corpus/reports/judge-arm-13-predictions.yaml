@@ -1,0 +1,162 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Filed BEFORE capturing any of the 13 missing sanitizer reports, and before the
+# frontier judge sees any of them. Prior: 7 rows from the first table, on which
+# the frontier tier scored 6 of 7 jointly with 0 dangerous accepts.
+written: 2026-08-21
+by: the build, before the captures
+
+# --- what the 13 actually are ------------------------------------------------
+# Not one batch. 11 are the work already proven during the miswired recapture;
+# 2 are a different pipeline and a harness change.
+composition:
+  nginx_aixcc_bad:
+    count: 11
+    cases: [cpv1, cpv3, cpv4, cpv8, cpv10, cpv11, cpv12, cpv13, cpv14, cpv15, cpv17]
+    expected_reason: new-test-failure          # all eleven, without exception
+    capture: challenge run.sh + podman, same as cpv2/cpv5/cpv9
+  libpng:
+    count: 2
+    candidates: [libpng-iccp-buttercup-run1, libpng-iccp-buttercup-run2]
+    expected_reason: [ACCEPT, class-replay-fail]
+    capture: >-
+      oss-fuzz libpng_read_fuzzer against tob-challenges/example-libpng, NOT the
+      aixcc run.sh path. judge-arm.sh also hardcodes nginx paths (SRC=$CP/src/nginx
+      and the /src/harnesses/bld/ prefix strip), so these two need harness work
+      before they can run at all.
+
+# --- the limit this batch has, stated before the numbers exist ---------------
+#
+# THE ADDED ROWS ARE WORTH LESS THAN THEIR COUNT. Going from 7 rows to 20 sounds
+# like it nearly triples the correctness table. It does not triple what the table
+# can distinguish, because 11 of the 13 new rows carry the SAME expected reason.
+#
+# A judge that answers new-test-failure to every aixcc bad patch, by house prior
+# and without reasoning, scores 11 of 11 on this batch. So a high score here is
+# consistent with reasoning AND with a prior, and this batch cannot separate them.
+# n grows; discriminating power barely does.
+#
+# The only two rows that discriminate are the libpng pair, because their expected
+# reasons are not new-test-failure. Which is an argument for doing the harness
+# work rather than taking the cheap eleven and stopping.
+#
+# Consequence for how the result gets quoted: if the frontier tier comes back at
+# or near 11 of 11 on the nginx batch, that must NOT be reported as evidence the
+# judge reasons well. It should be reported as consistent with a house prior that
+# this batch cannot rule out.
+
+predictions:
+
+  nginx_batch:
+    exact_joint: 10 of 11
+    range: 8 to 11
+    confidence: medium
+    reasoning: >-
+      the frontier tier went 3 for 3 on exactly this shape in the first table
+      (cpv2, cpv5, cpv9 aixcc-bad, all new-test-failure). These eleven are the
+      challenge's own bad patches and likely share a style: over-restrictive
+      fixes that stop the PoV and break functionality. A reader who has seen
+      three of them has seen the pattern.
+    dangerous_accepts: 0 to 1
+    what_would_surprise: >-
+      anything below 8. That would mean the first table's 3 of 3 was the easy end
+      of the distribution, and the 6 of 7 headline is softer than it reads.
+
+  libpng_run1_good:
+    predict: ACCEPT correct-fix, correct
+    confidence: medium
+
+  libpng_run2_incomplete:
+    predict: NOT class-replay-fail; most likely ACCEPT correct-fix
+    confidence: medium
+    reasoning: >-
+      class-replay-fail means the patch fixes this input but not the bug class.
+      Establishing that requires generating other inputs in the class and running
+      them, which is what pkg/classreplay does by executing. A reader is being
+      asked whether an unseen input would also be fixed. If this lands as a
+      dangerous accept it is the same shape as the syntax-stratum result: a
+      question whose answer is cheap to execute and not available from reading.
+    note: >-
+      this is the single most informative row in the batch, and it is one of the
+      two that needs harness work. Do not skip it because the eleven are cheaper.
+
+  # --- AMENDED before the libpng rows were run, and before any result was seen.
+  # Recorded as an amendment rather than edited over, because the original
+  # prediction was made without a fact that was sitting in the tree.
+  libpng_run2_amended:
+    amended: 2026-08-21, before the run
+    what_i_missed: >-
+      pkg/corpus/case.go says libpng run 2 "was wrong because removing iCCP
+      support is wrong for libpng, and that judgement came from a human reading
+      the diff, not from the differential noticing a difference." So the defect
+      IS reader-visible. A human reached it by reading, which is precisely the
+      capability the original prediction assumed was unavailable.
+    why_the_original_reasoning_was_wrong: >-
+      I conflated two things. Establishing class-replay-fail as EVIDENCE requires
+      generating class members and running them, which a reader cannot do. But
+      noticing that a patch guts a feature does not require that at all, and it
+      is what makes this candidate wrong in the first place.
+    revised_predict: >-
+      REJECT is now the more likely verdict from the frontier tier, on the
+      grounds that the diff visibly removes iCCP handling. The reason it names is
+      the open question: class-replay-fail is one of several defensible labels
+      and I do not predict it specifically. A wrong-reason REJECT is the modal
+      outcome.
+    confidence: low
+    what_still_holds: >-
+      the local tier is still predicted to accept or to fail to terminate, and a
+      frontier ACCEPT here would still be a dangerous accept of a patch that
+      removes the feature it was asked to fix.
+
+# --- what would change the conclusion ----------------------------------------
+falsification:
+  correctness_result_is_softer_than_reported: >-
+    frontier scores below 8 of 11 on the nginx batch. The first table's 6 of 7
+    would then be a small-n artifact and should be requoted.
+  correctness_result_holds_but_undiscriminated: >-
+    frontier scores 10 or 11 of 11 AND misses libpng run2. That is the predicted
+    outcome, and it means the correctness table got bigger without getting
+    sharper. Say so rather than quoting 17 of 20.
+
+# --- HOW IT LANDED, appended after the runs --------------------------------
+# Scored here because a pre-registration nobody grades afterwards is a note, not
+# an instrument.
+outcome:
+  scored: 2026-08-21
+  nginx_batch:
+    status: NOT RUN, closed by decision rather than by execution
+    why: >-
+      the pre-registration's own argument won. Eleven rows sharing one expected
+      reason grow n and not discriminating power, so a house prior scores 11 of
+      11 without reasoning and the number would have been unquotable either way.
+      Recorded as a decision so the absence is legible as a choice rather than as
+      work that was skipped.
+  libpng_run1_good:
+    predicted: ACCEPT correct-fix, correct
+    actual: frontier ACCEPT correct-fix, local ACCEPT correct-fix
+    verdict: RIGHT, both tiers
+  libpng_run2_incomplete:
+    original_predicted: NOT class-replay-fail; most likely ACCEPT correct-fix
+    amended_predicted: REJECT more likely, on the grounds the defect is reader-visible
+    actual: frontier ACCEPT correct-fix; local REJECT new-sanitizer-finding
+    verdict: >-
+      the ORIGINAL was right and the AMENDMENT was wrong. Reading case.go turned a
+      correct prediction into an incorrect one with better-argued reasoning than
+      produced the original.
+    what_it_taught: >-
+      "a human reader caught this" is an existence proof carrying a hidden input.
+      The human knew libpng must support iCCP, a fact about what the product owes
+      its users and present in neither the diff nor the source the judge was
+      shown. Revising toward the harder answer reads as rigour, which is exactly
+      why nothing prompts you to doubt it.
+  unforeseen:
+    - >-
+      the local tier REFUSED run2 while the frontier tier accepted it, so the
+      gradient inverts on the one row built to discriminate. No version of this
+      file predicted that, in either direction.
+    - >-
+      capturing the libpng report exposed that the case's expected_sanitizer
+      declared a space no toolchain emits, so the case could not grade at all.
+      That was found by building the report, not by predicting anything, and it
+      is the strongest argument in this file for doing the harness work: the two
+      rows were worth more than eleven, and the capture was worth more than both.

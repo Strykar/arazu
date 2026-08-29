@@ -1,0 +1,14 @@
+--- a/src/http/ngx_http_core_module.c
++++ b/src/http/ngx_http_core_module.c
+@@ -1994,6 +1994,11 @@ ngx_http_auth_basic_user(ngx_http_request_t *r)
+     if (ngx_decode_base64(&auth, &encoded) != NGX_OK) {
+         r->headers_in.user.data = (u_char *) "";
+         return NGX_DECLINED;
+     }
+ 
++    if (auth.len > NGX_HTTP_AUTH_MAX) {
++        r->headers_in.user.data = (u_char *) "";
++        return NGX_DECLINED;
++    }
++
+     auth.data[auth.len] = '\0';

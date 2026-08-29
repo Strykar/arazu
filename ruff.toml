@@ -1,0 +1,7 @@
+# SIM115 wants a context manager for every open(). The corpus scripts are
+# read-once-and-exit: they open a file, read it, and the handle drops with the
+# process. Accepted per-file rather than globally, so a long-running program
+# added later still gets the warning.
+[lint.per-file-ignores]
+"corpus/*.py" = ["SIM115"]
+"corpus/falsifying-class/**/*.py" = ["SIM115"]

@@ -1,0 +1,354 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Filed BEFORE the first live CRS run. This is about the JOIN, not the verdict:
+# the gate's verdict is already predicted in integration-predictions.yaml, and
+# the two seam questions were answered locally without spending anything.
+#
+# The live run tests exactly one thing: does Buttercup's real output directory
+# match the contract pkg/crsout took from reading its source?
+written: 2026-08-19
+by: the build, before the run
+
+# ---------------------------------------------------------------------------
+# BEFORE THE RUN, a chore outstanding since the first Gate #1 run:
+#
+#   helm uninstall buttercup -n crs
+#
+# before `make deploy`. A redeploy over a live release is how the last one got
+# stuck. Do it first, not after something looks wrong.
+
+# ---------------------------------------------------------------------------
+# THE CONTRACT AS READ FROM SOURCE
+#
+#   competition_api/main.py save_artifact():
+#     <run>/<task_id>/patches/<patch_id>.patch    base64-decoded to text
+#     <run>/<task_id>/povs/<pov_id>.bin           base64-decoded to bytes
+#     <run>/<task_id>/sarifs/<sarif_id>.sarif     json
+#     <run>/<task_id>/bundles/<bundle_id>.json    {bundle_id, task_id, pov_id, patch_id}
+#
+# Read, not assumed. But read from ONE writer: the competition API. If another
+# component writes artifacts by a different route, the layout may differ, and
+# reading one writer's code is not the same as observing the tree.
+
+predictions:
+
+  layout_matches:
+    predict: yes, patches/ and povs/ exist with those extensions
+    confidence: high
+    reasoning: >-
+      save_artifact is the only writer of these three types and its paths are
+      literal, not templated by config.
+    what_would_falsify: >-
+      artifacts under a different root, or an extra path component between
+      task_id and the type. Either means the run directory is assembled by
+      something other than this function.
+
+  bundle_present_and_parseable:
+    predict: PROBABLY NOT, and this is the one I expect to be wrong about
+    confidence: low
+    reasoning: >-
+      A bundle is a COMPETITION SUBMISSION artifact: it ties a pov to a patch
+      for scoring. A local run against a challenge may never construct one,
+      because nothing is being submitted anywhere. crsout falls back to
+      one-of-each pairing when no bundle exists, which is exactly the case that
+      would then be exercised.
+    what_this_would_mean: >-
+      not a defect. The fallback is there for this. But it means the bundle
+      pairing path — the one with the deliberate alphabetical-disagreement test
+      — has never run against real data, and the test is the only evidence it
+      works.
+
+  ids_resolve_to_files:
+    predict: yes
+    reasoning: >-
+      artifact_id is the filename stem by construction in save_artifact.
+    what_would_falsify: >-
+      a bundle naming a patch_id with no corresponding patches/<id>.patch. That
+      would be a dangling reference, and crsout currently does NOT check for it:
+      pair() returns the ids and the caller reads the file, so a missing file
+      surfaces as a read error rather than as a named decline. If it happens,
+      that is a seventh outcome, not a bug fix.
+
+  a_seventh_decline:
+    predict: at least even odds
+    reasoning: >-
+      six declines were derived from reading the writer, and every contract this
+      project has read has had at least one thing the source did not say. The
+      dangling-reference case above is the candidate I can already name.
+    pre_decision: >-
+      A decline the six do not cover gets a NEW name before the run is repeated.
+      Widening an existing name to swallow it would hide the case, which is the
+      whole reason the vocabulary is fixed rather than free text.
+
+# ---------------------------------------------------------------------------
+# WHAT THIS RUN DOES NOT TEST
+#
+# The gate verdict: predicted separately, and the honest prediction there is
+# ACCEPT on a run-2-shaped patch, because the reference-free subset cannot catch
+# an incomplete fix.
+#
+# The seal and the log: answered locally on 2026-08-19, both FALSIFIED by
+# inspection and both since fixed. Nothing about them needs a CRS.
+
+# ---------------------------------------------------------------------------
+# OUTCOME, 2026-08-19. Answered against THREE real run directories lifted out of
+# the live UI pod, from runs on 8, 9 and 12 August. Appended, not edited in.
+
+layout_matches_result:
+  predicted: yes, patches/ and povs/ exist with those extensions
+  observed: yes below the task id, and one component the contract did not have
+  verdict: HELD, with a correction
+  detail: >-
+    get_run_data_dir() returns <root>/run-data-<timestamp>, a new directory per
+    UI start, and the task id sits under THAT. Capture takes the run-data dir so
+    the contract holds, but a caller pointed at BUTTERCUP_UI_RUN_DATA_DIR finds
+    nothing, and three historical run-data dirs sit side by side with nothing in
+    the layout saying which is live. That is the caller's problem to solve and it
+    is now pinned by a test.
+
+bundle_present_and_parseable_result:
+  predicted: PROBABLY NOT, stated as the one I expected to be wrong about
+  observed: zero bundles across three real runs
+  verdict: HELD
+  consequence: >-
+    RECORDED EXPLICITLY because it would otherwise be quoted as coverage: the
+    bundle pairing path, and the alphabetical-disagreement test that is its only
+    evidence, has never run against real data. Every real capture takes the
+    one-of-each fallback. A passing test on synthetic input is a claim about the
+    test, not about the path.
+
+ids_resolve_to_files_result:
+  observed: yes, on every artifact in all three runs
+  note: >-
+    the dangling-reference case cannot arise where no bundle exists, so the
+    seventh decline named in advance remains unobserved rather than disproven.
+
+a_seventh_decline_result:
+  predicted: at least even odds
+  observed: none. Every real run landed inside the six.
+  verdict: DID NOT HAPPEN
+  detail: >-
+    two runs captured; one produced crs-no-patch on its own, which is the
+    decline the vocabulary was built for occurring naturally rather than being
+    constructed. The pre-decision stands unused.
+
+unexpected_finding:
+  what: make deploy regenerates the LiteLLM ConfigMap
+  detail: >-
+    after a clean deploy the running config was the stock upstream list — 10
+    anthropic, 9 openai, 4 azure, 2 gemini — not the Anthropic-only routing. With
+    only an ANTHROPIC_API_KEY set, two thirds of it fails. A run submitted in that
+    state would have failed in a way that looked like a join problem. Caught by
+    checking routing before submitting rather than after.
+  fixed_by: >-
+    scripts/buttercup-model.sh gained an `anthropic` mode. Re-run it after every
+    deploy; the comment in the script says why.
+
+real_patch_shape:
+  observed: >-
+    Buttercup's own patches carry diff --git, an index line and ranged hunks.
+    The looksLikeDiff weakness found against raw local-model output is therefore
+    not what a CRS run exercises: the patcher post-processes before writing.
+    That narrows the gap without closing it.
+
+# ---------------------------------------------------------------------------
+# FOURTH RUN, 2026-08-19/20. Submitted 14:32Z, PoV at 14:35Z, no patch. Appended.
+
+fourth_run:
+  task: 017d6977-ca2e-46cd-ad5c-d8f92495024b
+  observed: one pov, zero patches, crsout returns crs-no-patch
+  cause: >-
+    NOT a CRS capability limit. The patcher reached the model and got a 400:
+    "This model does not support assistant message prefill" (request_id
+    req_011CeCGsEZQpidN6A96HGvvc), on Model Group openai-gpt-4.1. That group is
+    remapped to anthropic/claude-sonnet-4-6 by scripts/buttercup-model.sh
+    anthropic, which is my routing, not Buttercup's. The patcher prefills an
+    assistant turn, which is an OpenAI-shaped technique the target refuses.
+  what_it_says_about_the_thesis: >-
+    "the model swaps, the gate does not" is about the GATE being model
+    independent, and this neither supports nor damages that: no patch was
+    produced, so the gate never ran. What it does falsify is the weaker
+    operational assumption sitting under it, that swapping the backing model is
+    a routing-config change. It is not. The swap succeeded at the routing layer
+    and failed at the API-semantics layer, because the caller's prompting
+    technique is not portable across backends.
+  open_and_not_guessed: >-
+    whether another Anthropic model accepts prefill is unsettled. Testing it
+    needs a key this session could not read, so it is named rather than assumed.
+
+# THE REAL FINDING, and it is about the contract rather than the run.
+#
+# crsout returns crs-no-patch here, and that is the correct verdict FOR WHAT THE
+# DIRECTORY SHOWS. But the directory shows the same thing whether the CRS
+# searched and found nothing or errored on its first model call. The output
+# contract records artifacts, not why an artifact is absent, so those two are
+# indistinguishable at capture time.
+#
+# This is NOT a seventh decline: the pre-decision reserves a new name for an
+# outcome the six do not cover, and this outcome IS crs-no-patch. It is a limit
+# of what the decline can be read to mean, and it is recorded because
+# "crs-no-patch" will otherwise be quoted as "the CRS could not fix it" when it
+# also covers "the CRS never got a usable answer out of its model".
+no_patch_has_two_causes:
+  visible_in_the_directory: no
+  consequence: >-
+    88359bc1 and 017d6977 both capture as crs-no-patch and are NOT independent
+    evidence of the same thing. Counting them as two natural declines would be
+    the same false attribution as crediting a green suite to a patch that no
+    test exercises.
+
+# ---------------------------------------------------------------------------
+# PREFILL, SETTLED 2026-08-20. Five calls, four tokens each. Appended.
+
+prefill_support:
+  method: one assistant-prefill request per model against the live API
+  result:
+    claude-haiku-4-5-20251001: accepted
+    claude-sonnet-4-5-20250929: accepted
+    claude-sonnet-4-6: refused
+    claude-opus-4-6: refused
+    claude-opus-4-7: refused
+  reading: >-
+    a clean generational split. 4.6 and later dropped assistant prefill. This
+    was inferred from the run history first and the inference held, but the
+    inference could not have given the boundary: two successful runs and one
+    failure are consistent with several different cut points.
+  what_it_fixes: >-
+    the anthropic mode's redirect target was claude-sonnet-4-6, so every entry
+    it rewrote refused prefill. Now claude-sonnet-4-5-20250929. The ten stock
+    anthropic/ entries are left untouched even though five of them route to
+    refusing models, because stock is the configuration that produced patches on
+    8 and 9 Aug and deviating trades a known-good state for an untested one.
+  found_by: >-
+    reading state/litellm/config.yaml, not by probing. The record showed the
+    patcher's group already resolved to Haiku 4.5. The probe then settled the
+    boundary the record could not.
+
+api_credit:
+  observed: >-
+    the key was out of credit at 01:50 IST on 20 Aug, refusing every call with
+    "credit balance is too low". Task 017d6977 got a prefill 400 at 15:00Z on
+    the 19th, so credit existed then and ran out between.
+  note: >-
+    a credit failure names itself. The prefill failure did not, and presented as
+    a CRS that could not find a fix.
+
+# ---------------------------------------------------------------------------
+# FIFTH RUN, filed BEFORE submitting. Tests the routing fix, not the join.
+written: 2026-08-20
+by: the build, before the run
+
+fifth_run_predictions:
+  config: >-
+    scripts/buttercup-model.sh anthropic, AFTER the CORRECTED 20 Aug fix. An
+    entry is kept only if its upstream is measured to accept prefill; 5 kept,
+    20 redirected to claude-sonnet-4-5-20250929. Verified by reading the live
+    pod: 23 sonnet-4-5, 2 haiku-4-5, none refusing. The patcher's group,
+    openai-gpt-4.1, now resolves to claude-sonnet-4-5-20250929.
+
+  patcher_reaches_the_model_without_a_400:
+    predict: yes
+    confidence: high
+    reasoning: >-
+      the 400 was "does not support assistant message prefill" and both models
+      the patcher can now resolve to accept prefill, measured directly.
+    what_would_falsify: >-
+      a 400 on a group I did not enumerate, or a prefill refusal from a model
+      the table says accepts. Either means the table is scoped wrong, not that
+      the fix is wrong.
+
+  which_group_it_resolves_to:
+    predict: openai-gpt-4.1 -> anthropic/claude-sonnet-4-5-20250929
+    reasoning: >-
+      that is the group named in task 017d6977's error, and it is now
+      redirected because its stock upstream, claude-sonnet-4-6, refuses
+      prefill.
+    what_would_falsify: >-
+      any other group. That would mean the patcher picks its model per node and
+      017d6977 showed one node's choice rather than the patcher's.
+
+  a_patch_is_emitted:
+    predict: MAYBE, and this is NOT what the run is for
+    confidence: low
+    reasoning: >-
+      two of four prior runs produced a patch. A no-patch run with a clean
+      patcher log is a legitimate CRS outcome and does not falsify the fix.
+    pre_decision: >-
+      the fix is verified by the ABSENCE of the 400, read from the patcher log,
+      not by a patch appearing. Do not let a no-patch outcome be recorded as
+      the fix failing, and do not let a patch be recorded as proving more than
+      that one attempt succeeded.
+
+  crsout_captures_without_declining:
+    predict: only testable if a patch is emitted
+    reasoning: >-
+      with a patch and a pov, Capture should return Captured, as it did on the
+      8 and 9 Aug runs. Without a patch it returns crs-no-patch, which is the
+      decline whose two causes are now documented.
+
+  what_this_run_cannot_settle:
+    - >-
+      whether a local backend works. That path is still untested in both
+      directions and stays an item-23 pre-travel task.
+    - >-
+      whether the five stock entries routing to prefill-refusing models are
+      ever requested. If one is, the run 400s and that is a finding, not a
+      regression.
+
+correction_20_aug:
+  what_was_wrong: >-
+    commits f9631d3 and 5e82644 said stock routed openai-gpt-4.1 to
+    claude-haiku-4-5 and that the remap had overwritten a working mapping.
+  cause: >-
+    litellm_params precedes model_name in every config entry, so a regex that
+    took a model_name and searched forward for "model:" paired each name with
+    the NEXT entry's upstream. Every row of that table was shifted by one. Read
+    as YAML instead, openai-gpt-4.1 -> claude-sonnet-4-6, which refuses prefill.
+  consequence: >-
+    the first fix kept every anthropic/ entry, so it preserved the exact
+    mapping that broke the patcher. Caught by reading the live pod back after
+    applying it, which is the step that exists for this.
+  now: >-
+    an entry is kept only if its upstream is MEASURED to accept prefill. The
+    criterion is the measurement, not the provider prefix.
+  still_unexplained: >-
+    how 8 and 9 Aug produced patches under a config routing to a refusing
+    model. Nothing should be built on that until it is understood.
+
+fifth_run_result:
+  task: 0e69cb3f-68e4-4f52-a056-303b63408157
+  patcher_reaches_the_model_without_a_400:
+    predicted: yes
+    observed: zero ERROR lines, zero prefill refusals, agent loop ran to a patch
+    verdict: HELD. The routing fix is verified on the criterion filed before the run.
+  which_group_it_resolves_to:
+    predicted: openai-gpt-4.1 -> anthropic/claude-sonnet-4-5-20250929
+    observed: consistent, no group-level error to contradict it
+  a_patch_is_emitted:
+    predicted: MAYBE, and explicitly not what the run was for
+    observed: yes, in 9 minutes. Restores png_byte keyword[81], libpng's own
+      upstream constant, which is the shape run 1 produced on 9 Aug.
+    note: >-
+      recorded as one attempt succeeding, not as a rate, per the pre-decision.
+  crsout_captures_without_declining:
+    predicted: Captured if a patch is emitted
+    observed: captured, no decline
+    verdict: HELD, and it is the first capture from a COMPLETE run. Every prior
+      real capture came from a truncated one.
+  a_measurement_error_caught_in_passing: >-
+    the watch script's `grep -iE 'error|400'` matched 21:02:50,400, a millisecond
+    field, and reported it as a 400 on a run whose whole purpose was detecting a
+    400. The real check is ' - ERROR - ', the log's own level delimiter. Third
+    instrument in one night to read structure by proximity, after the YAML regex
+    and buttercup-model.sh show.
+
+  bears_on_the_corpus_argument: >-
+    the corpus rests on run 1 and run 2 being two outcomes of the SAME setup,
+    one correct and one not. This third independent run landed on run 1's shape,
+    restoring libpng's own constant. That is mild evidence that the reference
+    patch is the attractor and run 2 the exception, which is the direction the
+    argument already assumes. Mild, and stated as such: n=3, different model
+    (sonnet-4-5 rather than whatever ran in August), and nothing here was
+    designed to measure a rate. Do not let it harden into "the CRS usually gets
+    it right" - the claim is and stays that nothing in the pipeline
+    distinguished run 2 from run 1.

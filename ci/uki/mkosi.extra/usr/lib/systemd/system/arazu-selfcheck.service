@@ -1,0 +1,37 @@
+[Unit]
+Description=Arazu bare-metal self-check
+# NOT After=multi-user.target. Combined with WantedBy=multi-user.target that is
+# a dependency loop: the target waits for this unit because it wants it, and
+# this unit waits for the target. The boot stalled just before multi-user and
+# the check never ran.
+#
+# The network ordering IS needed: the control probe must reach the network or
+# the whole containment table proves nothing, and without this it races DHCP.
+After=systemd-networkd-wait-online.service
+Wants=systemd-networkd-wait-online.service
+Conflicts=getty@tty1.service serial-getty@ttyS0.service
+
+[Service]
+Type=oneshot
+ExecStartPre=-/usr/bin/mount -t bpf bpf /sys/fs/bpf
+# The screen is primary (console=tty0 is last on the cmdline), and the output is
+# ALSO mirrored to a serial port when one exists. Not redundancy for its own
+# sake: the metal has no serial and is read by eye, a VM has no screen worth
+# reading and is captured over serial, and testing only one of them is how a
+# console-ordering bug shipped — verified in QEMU over ttyS0, which is exactly
+# the console the target machine does not have.
+# coldrun runs the self-check itself, as its tier 2. Running both here executed
+# it twice, which cost a minute and printed two result screens on a console that
+# only keeps the last one.
+ExecStart=/bin/bash -c 'run() { if command -v go >/dev/null && [ -x /usr/local/bin/arazu-coldrun ]; then /usr/local/bin/arazu-coldrun; else /usr/local/bin/arazu-selfcheck; fi; }; if [ -w /dev/ttyS0 ]; then run 2>&1 | tee /dev/ttyS0; else run; fi'
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
+TTYReset=yes
+TTYVHangup=yes
+RemainAfterExit=yes
+# No reboot and no poweroff: the verdict has to stay on screen to be photographed.
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target
