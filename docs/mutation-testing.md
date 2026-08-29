@@ -32,9 +32,9 @@ The rebuild matters. The `cmd` tests exec binaries out of `bin/`, so a mutant th
   tested, so it is evidence of nothing; it is deliberately not folded into `untestable`, which
   is a declared exemption carrying a reason, whereas this is the harness being broken.
 
-## Current state, 2026-08-23
+## Current state, 2026-08-29
 
-41 mutations: 38 caught, 3 subsumed, 0 uncaught, 0 did not build.
+46 mutations: 43 caught, 3 subsumed, 0 uncaught, 0 did not build.
 Read the totals off a run rather than incrementing them: this line said 40/37
 for a day after gate-reason-bad-signature was added.
 
@@ -49,14 +49,36 @@ with a warm module cache the mutants built from the cache and passed regardless.
 
 ### What this number covers
 
-The default catalogue is five packages: `pkg/fido` (15), `pkg/contentstore` (10),
-`pkg/manifest` (8), `pkg/auditlog` (4), `cmd/ingress-verify` (3). The containment and
-measured-state layers are a **separate** catalogue, `testdata/mutations-root.json`, run by
-`make mutation-test-root` with sudo and a TPM: 6 mutations across `pkg/tpmseal` (3),
-`pkg/egress` (2) and `bpf` (1). Quoting the 40 without saying which catalogue it is
-implies coverage of the containment layer that this run does not provide.
+The default catalogue is `pkg/fido` (15), `pkg/contentstore` (10), `pkg/manifest` (8),
+`cmd/ingress-verify` (4), `pkg/auditlog` (4), `pkg/revert` (2), `pkg/classreplay` (1),
+`pkg/dossier` (1) and `pkg/hostcap` (1). The containment and measured-state layers are a **separate** catalogue,
+`testdata/mutations-root.json`, run by `make mutation-test-root` with sudo and a TPM: 7
+mutations across `pkg/tpmseal` (4), `pkg/egress` (2) and `bpf` (1). Quoting a total without
+saying which catalogue it is implies containment coverage the default run does not provide.
 
-Neither catalogue touches `pkg/hostcap`, `pkg/corpus`, `cmd/contained-run` or `cmd/demo`.
+Neither catalogue touches `pkg/corpus`, `cmd/contained-run` or `cmd/demo`.
+
+### The gate was uncovered until 2026-08-29
+
+The first 41 mutations were entirely integrity and provenance: manifests, content store,
+audit log, FIDO, ingress. Not one touched a gate stage, so "0 uncaught" described the
+tamper-evidence layer and said nothing about whether a verdict is reached correctly. Four
+defects found in the gate that week were all in that blind spot, and each is now pinned by
+a mutation:
+
+| Mutation | What it kills |
+|---|---|
+| `revert-stale-output-read` | M1 reading a previous run's output when this run produced none |
+| `revert-prepatch-site-ignored` | M1 crediting a patch against a crash at an undeclared site |
+| `classreplay-no-reference-accepts` | M2 accepting agreement with the unpatched build |
+| `dossier-emit-leaves-partial-state` | a failed emit leaving a partial dossier behind |
+| `hostcap-privilege-uid-not-capability` | the readiness matrix asking for uid 0 instead of CAP_SYS_ADMIN |
+
+The lesson generalises past these four: every mutation targeted a *check*, and none
+targeted *evidence acquisition*, which is where all four defects lived. A mutation that
+makes acquisition return stale data can also score `subsumed` rather than `uncaught` when
+the guard it would trip is itself dead, so a saturated catalogue is not by itself evidence
+that the layer is covered.
 
 The three subsumed ones are real redundancy rather than gaps:
 
