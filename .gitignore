@@ -47,6 +47,11 @@ corpus/reports/m1-decisions/
 corpus/reports/m1-regrade/
 corpus/reports/candidates/
 corpus/reports/asan/
+# judge-arm.sh writes per-run prompts and responses to reports/judge/<case>/;
+# one case of four models left 964K untracked. The judge-arm-*.md and
+# judge-arm-*.yaml evidence files beside it stay tracked, which is why this
+# is the directory and not a glob.
+corpus/reports/judge/
 corpus/reports/matrix*.json
 corpus/reports/grader-calibration.json
 corpus/reports/m0-nginx.json
