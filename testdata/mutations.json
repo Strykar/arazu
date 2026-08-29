@@ -559,5 +559,16 @@
     "packages": [
       "./pkg/dossier/"
     ]
+  },
+  {
+    "id": "hostcap-privilege-uid-not-capability",
+    "check": "the privilege row asks for CAP_SYS_ADMIN, not uid 0",
+    "file": "pkg/hostcap/hostcap.go",
+    "before": "\treturn hasSysAdmin, fmt.Sprintf(\"euid=%d cap_sys_admin=%t\", euid, hasSysAdmin)",
+    "after": "\treturn euid == 0, fmt.Sprintf(\"euid=%d cap_sys_admin=%t\", euid, hasSysAdmin)",
+    "expect": "TestPrivilegeRowAsksForTheCapabilityNotTheUID",
+    "packages": [
+      "./pkg/hostcap/"
+    ]
   }
 ]

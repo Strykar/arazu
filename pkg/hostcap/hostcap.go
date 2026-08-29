@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package hostcap probes the host for the capabilities the containment
-// spike needs and refuses to proceed when one is missing.
+// Package hostcap probes the host for the capabilities the containment spike
+// needs and refuses to proceed when one is missing.
 //
-// The point of probing rather than assuming is the BPF LSM silent-failure
-// trap: if the bpf LSM is compiled in but absent from the runtime lsm= list,
-// programs load, the verifier accepts them, attach returns success, and the
-// hooks never fire. A gate that is not running looks exactly like a gate
-// that permits everything.
+// Probed rather than assumed because of the BPF LSM silent-failure trap: with
+// bpf compiled in but absent from the runtime lsm= list, attach returns success
+// and the hooks never fire, so a gate that is not running permits everything.
 package hostcap
 
 import (
@@ -48,10 +46,8 @@ func (r *Report) finalise() {
 
 func (r Report) JSON() ([]byte, error) { return json.MarshalIndent(r, "", "  ") }
 
-// lsmListHasBPF reports whether the bpf LSM is in the active list.
-//
-// The comparison is per element and exact. A substring match would accept a
-// hypothetical "bpfmisc" and report a gate that is not there.
+// lsmListHasBPF matches per element and exact: a substring match would accept
+// "bpfmisc" and report a gate that is not there.
 func lsmListHasBPF(list string) bool {
 	for _, name := range strings.Split(strings.TrimSpace(list), ",") {
 		if strings.TrimSpace(name) == "bpf" {
@@ -98,8 +94,7 @@ func isMountpoint(path string) bool {
 	return st.Dev != parent.Dev
 }
 
-// Probe runs every capability check and derives the egress backend and TPM
-// device from the results.
+// Probe runs every check and derives the egress backend and TPM device.
 func Probe() Report {
 	var r Report
 
@@ -151,10 +146,8 @@ func Probe() Report {
 		"tpm2_policypcr", "tpm2_flushcontext")
 	r.add("tpm2-tools", true, ok, d, "install tpm2-tools")
 
-	// Read PCR 23 rather than resetting it. This confirms the whole path to
-	// the TPM works, not merely that the device node opens and the binaries
-	// exist, and a capability probe has no business mutating host state to
-	// answer a question. seal-tool does the reset when it means to.
+	// Read PCR 23 rather than resetting it: a capability probe must not mutate
+	// host state, and a read already exercises the whole path to the TPM.
 	if r.TPMDevice != "" && ok {
 		cmd := exec.Command("tpm2_pcrread", "sha256:23")
 		cmd.Env = append(os.Environ(), "TPM2TOOLS_TCTI=device:"+r.TPMDevice)
@@ -170,21 +163,13 @@ func Probe() Report {
 	d, ok = haveAll("python3")
 	r.add("python3", true, ok, d, "install python3 (used by the egress probe)")
 
-	// Everything above is REQUIRED: without it the containment envelope cannot
-	// be built or attached, which is what this repository is.
-	//
-	// Everything below is OPTIONAL and grouped by the tier it unlocks. A
-	// reviewer who only wants to build the gate and watch the containment demo
-	// should not be told they are missing minikube. Reporting them as required
-	// would make a working checkout look broken, and a checker that cries wolf
-	// gets ignored the first time it is right.
-	// git sits under the optional comment above but is required: a host without
-	// it fails check-env and is told to stop, which is the "working checkout
-	// looks broken" outcome that comment argues against. Kept required because
-	// nothing here works without it, and moved so the grouping reads true.
+	// Everything above, and git, is required to build and attach the envelope.
 	d, ok = haveAll("git")
 	r.add("git", true, ok, d, "install git (needed to stage the corpus)")
 
+	// The grade:, model: and crs: tiers are optional. Marking them required
+	// would make a working checkout look broken, and a checker that cries wolf
+	// gets ignored the first time it is right.
 	d, ok = haveAll("podman")
 	r.add("grade:podman", false, ok, d,
 		"install podman — needed to build and run challenge targets")
@@ -193,8 +178,7 @@ func Probe() Report {
 	r.add("grade:prove", false, ok, d,
 		"install perl TAP::Harness — the nginx suite the grader diffs against baseline")
 
-	// grade-patch.sh hard-requires both. Without them check-env reported the
-	// grading tier green on a host where grading exits 2.
+	// grade-patch.sh hard-requires both, so the tier is not green without them.
 	d, ok = haveAll("yq")
 	r.add("grade:yq", false, ok, d, "install yq — grade-patch.sh reads project.yaml with it")
 
@@ -213,11 +197,20 @@ func Probe() Report {
 	r.add("crs:cluster", false, ok, d,
 		"install minikube, kubectl and helm — only to run the Buttercup CRS")
 
-	r.add("root", true, os.Geteuid() == 0, fmt.Sprintf("euid=%d", os.Geteuid()),
+	ok, d = privilege(HasSysAdmin(), os.Geteuid())
+	r.add("root", true, ok, d,
 		"run under sudo: netns creation and LSM attach need CAP_SYS_ADMIN")
 
 	r.finalise()
 	return r
+}
+
+// privilege reports whether this host can create a netns and attach an LSM
+// program. The question is CAP_SYS_ADMIN, not uid 0: a container root holds the
+// uid without the capability, and a process can hold the capability without the
+// uid. euid stays in the evidence because it is what a reader will check first.
+func privilege(hasSysAdmin bool, euid int) (bool, string) {
+	return hasSysAdmin, fmt.Sprintf("euid=%d cap_sys_admin=%t", euid, hasSysAdmin)
 }
 
 // Text renders the matrix for a human reader.

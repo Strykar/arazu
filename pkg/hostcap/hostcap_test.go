@@ -2,7 +2,10 @@
 
 package hostcap
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestLSMListParsingDetectsBPF(t *testing.T) {
 	if !lsmListHasBPF("capability,landlock,lockdown,yama,apparmor,bpf") {
@@ -45,5 +48,21 @@ func TestReportOKWhenOnlyOptionalCheckFails(t *testing.T) {
 	r.finalise()
 	if !r.OK {
 		t.Fatal("report not OK despite only an optional check failing")
+	}
+}
+
+// The privilege row must ask for the capability, not the uid. Both directions
+// are wrong answers a human acts on: a container root has uid 0 without
+// CAP_SYS_ADMIN and would be told the host is ready, and a process holding the
+// capability without uid 0 would be told to re-run under sudo.
+func TestPrivilegeRowAsksForTheCapabilityNotTheUID(t *testing.T) {
+	if ok, detail := privilege(false, 0); ok {
+		t.Errorf("uid 0 without CAP_SYS_ADMIN reported as privileged (%s)", detail)
+	}
+	if ok, detail := privilege(true, 1000); !ok {
+		t.Errorf("CAP_SYS_ADMIN without uid 0 reported as unprivileged (%s)", detail)
+	}
+	if _, detail := privilege(false, 0); !strings.Contains(detail, "cap_sys_admin=false") {
+		t.Errorf("evidence does not say what was observed: %q", detail)
 	}
 }
