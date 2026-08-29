@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -181,7 +182,7 @@ func TestUnmeasuredStateFailsClosed(t *testing.T) {
 		t.Fatalf("provision: %v", err)
 	}
 	err := withPCRLock(func() error {
-		if e := Reset(); e != nil {
+		if e := resetPCR(); e != nil {
 			return e
 		}
 		got, e := unsealCurrentState(dir)
@@ -305,5 +306,43 @@ func TestResealingInvalidatesTheOldMeasurement(t *testing.T) {
 	}
 	if got, err := Unseal(dir, rootA); err == nil {
 		t.Fatalf("the superseded measurement still unseals, returned %q", got)
+	}
+}
+
+// Reset drives the same PCR every other sequence depends on, so it belongs
+// under the same lock. Unlocked it can zero PCR 23 in the middle of a
+// provision or unseal -- including from another test's cleanup.
+func TestResetWaitsForTheSequenceLock(t *testing.T) {
+	requireTPM(t)
+	cleanPCR(t)
+
+	held := make(chan struct{})
+	release := make(chan struct{})
+	go func() {
+		_ = withPCRLock(func() error {
+			close(held)
+			<-release
+			return nil
+		})
+	}()
+	<-held
+
+	done := make(chan error, 1)
+	go func() { done <- Reset() }()
+
+	select {
+	case <-done:
+		t.Fatal("Reset ran while another sequence held the pcr lock")
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("reset once the lock was free: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Reset never completed after the lock was released")
 	}
 }

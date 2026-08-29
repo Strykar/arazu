@@ -144,7 +144,7 @@ func extend(contentRoot string) error {
 	if _, err := hex.DecodeString(contentRoot); err != nil || len(contentRoot) != 64 {
 		return fmt.Errorf("content root %q is not a sha256 hex digest", contentRoot)
 	}
-	if _, err := tpm2("tpm2_pcrreset", fmt.Sprintf("%d", PCR)); err != nil {
+	if err := resetPCR(); err != nil {
 		return err
 	}
 	if _, err := tpm2("tpm2_pcrextend", fmt.Sprintf("%d:sha256=%s", PCR, contentRoot)); err != nil {
@@ -288,7 +288,11 @@ func sealedRootNote(dir string) string {
 
 // Reset returns PCR 23 to zeros, so a run leaves no measurement behind on
 // the host's TPM.
-func Reset() error {
+func Reset() error { return withPCRLock(resetPCR) }
+
+// resetPCR zeroes the PCR. The caller must already hold the pcr lock; Reset is
+// the entry point for callers that do not.
+func resetPCR() error {
 	_, err := tpm2("tpm2_pcrreset", fmt.Sprintf("%d", PCR))
 	return err
 }

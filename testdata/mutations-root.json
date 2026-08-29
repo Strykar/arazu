@@ -69,5 +69,16 @@
     "packages": [
       "./cmd/contained-run/"
     ]
+  },
+  {
+    "id": "tpmseal-reset-unlocked",
+    "check": "Reset takes the pcr lock, so it cannot zero the register mid-sequence",
+    "file": "pkg/tpmseal/tpmseal.go",
+    "before": "func Reset() error { return withPCRLock(resetPCR) }",
+    "after": "func Reset() error { return resetPCR() }",
+    "expect": "TestResetWaitsForTheSequenceLock",
+    "packages": [
+      "./pkg/tpmseal/"
+    ]
   }
 ]
