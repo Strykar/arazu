@@ -3,13 +3,6 @@
 // Package dossier writes and re-checks the evidence bundle a verdict is carried
 // in.
 //
-// WHY THIS EXISTS. The first dossier held one file, decision.json, whose
-// evidence named paths like /tmp/<session>/cap/candidate.patch. It recorded
-// CONCLUSIONS and pointed at INPUTS, and the inputs were in a session scratch
-// directory. So it was auditable by one process on one machine on one day,
-// which is the opposite of the property it exists to have, and a verifier built
-// against it could only re-read the JSON it was handed.
-//
 // A dossier is self-contained or it is not a dossier: the artifacts the verdict
 // was reached from are copied in, named by a path RELATIVE to the directory and
 // by the hash of the bytes, and the whole directory is what gets measured. Move
@@ -41,16 +34,23 @@ const DecisionFile = "decision.json"
 // sources maps a role ("candidate-patch", "pov", "case") to a path on this
 // machine. Each is copied under ArtifactsDir and recorded relative to dir.
 //
-// ORDER. Artifacts are written BEFORE decision.json, and decision.json before
-// anything measures, because ContentRoot hashes what MeasureBundle scanned. A
-// file written after measurement sits in the directory, outside the root, and
-// every downstream check still passes. Nothing in the type system enforces the
-// order, so it is stated here and tested.
+// ORDER. Artifacts land before decision.json, and decision.json before anything
+// measures, because ContentRoot hashes what MeasureBundle scanned. A file
+// written after measurement sits outside the root with every check still
+// passing. Nothing in the type system enforces this, so it is tested.
 func Emit(dir string, d gate.Decision, sources map[string]string) (gate.Decision, error) {
 	if dir == "" {
 		return d, fmt.Errorf("no dossier directory")
 	}
-	if err := os.MkdirAll(filepath.Join(dir, ArtifactsDir), 0o700); err != nil {
+	// Staged, then moved in once complete: a partial dossier is a directory that
+	// looks like evidence and is not.
+	stage, err := os.MkdirTemp(dir, ".emit-")
+	if err != nil {
+		return d, err
+	}
+	defer os.RemoveAll(stage)
+
+	if err := os.MkdirAll(filepath.Join(stage, ArtifactsDir), 0o700); err != nil {
 		return d, err
 	}
 
@@ -67,7 +67,7 @@ func Emit(dir string, d gate.Decision, sources map[string]string) (gate.Decision
 			continue
 		}
 		rel := filepath.Join(ArtifactsDir, role+filepath.Ext(src))
-		sum, err := copyAndHash(src, filepath.Join(dir, rel))
+		sum, err := copyAndHash(src, filepath.Join(stage, rel))
 		if err != nil {
 			return d, fmt.Errorf("artifact %s: %w", role, err)
 		}
@@ -78,7 +78,29 @@ func Emit(dir string, d gate.Decision, sources map[string]string) (gate.Decision
 	if err != nil {
 		return d, err
 	}
-	return d, os.WriteFile(filepath.Join(dir, DecisionFile), append(b, '\n'), 0o644)
+	if err := os.WriteFile(filepath.Join(stage, DecisionFile), append(b, '\n'), 0o644); err != nil {
+		return d, err
+	}
+	if err := syncDir(stage); err != nil {
+		return d, err
+	}
+
+	if err := os.Rename(filepath.Join(stage, ArtifactsDir), filepath.Join(dir, ArtifactsDir)); err != nil {
+		return d, err
+	}
+	if err := os.Rename(filepath.Join(stage, DecisionFile), filepath.Join(dir, DecisionFile)); err != nil {
+		return d, err
+	}
+	return d, syncDir(dir)
+}
+
+func syncDir(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Sync()
 }
 
 func copyAndHash(src, dst string) (string, error) {

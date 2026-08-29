@@ -548,5 +548,16 @@
     "packages": [
       "./pkg/classreplay/"
     ]
+  },
+  {
+    "id": "dossier-emit-leaves-partial-state",
+    "check": "a failed emit removes its staging directory, leaving no partial dossier",
+    "file": "pkg/dossier/emit.go",
+    "before": "\tdefer os.RemoveAll(stage)\n",
+    "after": "",
+    "expect": "TestAFailedEmitLeavesNoPartialDossier",
+    "packages": [
+      "./pkg/dossier/"
+    ]
   }
 ]
