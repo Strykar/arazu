@@ -1,30 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package crsout captures a CRS run's output as a corpus case.
+// Package crsout captures a CRS run's output as a corpus case, in the shape
+// the gate, the graders and eval M0 already read. A second format would be a
+// second thing to keep true.
 //
-// This is Buttercup M2, the output-contract capture: it turns what a real run
-// leaves on disk into (target ref, PoV, candidate patch) that the existing
-// corpus machinery can grade. Building it as a case emitter rather than a
-// bespoke path is the point — the gate, the graders and eval M0 already know
-// how to read a case, and a second format would be a second thing to keep true.
-//
-// THE OUTPUT CONTRACT, read from the CRS rather than assumed:
+// The output contract, read from the CRS rather than assumed:
 //
 //	<run>/<task_id>/patches/<patch_id>.patch    unified diff, plain text
 //	<run>/<task_id>/povs/<pov_id>.bin           the reproducer, raw bytes
 //	<run>/<task_id>/sarifs/<sarif_id>.sarif     JSON
 //	<run>/<task_id>/bundles/<bundle_id>.json    {task_id, pov_id, patch_id, ...}
 //
-// The bundle is what ties a PoV to the patch that claims to fix it. Pairing by
-// filename or by mtime would agree with the bundle most of the time, which is
-// the worst property a join can have.
-//
-// WHY "NO PATCH" IS A VERDICT AND NOT AN ABSENCE. buttercup-task.sh ends by
-// printing a suggestion to a human, so today a run that produces nothing simply
-// produces nothing. Automating that turns it silent: the chain proceeds against
-// an empty directory and the gate is never reached, which is indistinguishable
-// downstream from a clean run. Every way this can decline to produce a case is
-// named, and the caller is expected to record it.
+// The bundle ties a PoV to the patch that claims to fix it; pairing by filename
+// or mtime would agree with it most of the time, the worst property a join can
+// have. Every decline is named and returned: a chain that proceeds against an
+// empty directory never reaches the gate and looks downstream like a clean run.
 package crsout
 
 import (
@@ -38,34 +28,26 @@ import (
 	"strings"
 )
 
-// Outcome names what a capture attempt established. It is deliberately not a
-// bool: "the CRS produced nothing" and "the CRS produced something unusable"
-// send an operator to different places.
+// Outcome names what a capture attempt established. Not a bool: "produced
+// nothing" and "produced something unusable" go to different places.
 type Outcome string
 
 const (
 	// Captured means a case was written.
 	Captured Outcome = "captured"
-	// NoRun means the task directory does not exist. The CRS was never asked,
-	// or was asked and the submission failed.
+	// NoRun means no task directory: the CRS was never asked, or submission failed.
 	NoRun Outcome = "crs-no-run"
-	// NoPatch means the run exists and produced no patch. A real result about
-	// the CRS, not an error, and the commonest way an unattended chain would
-	// otherwise proceed against nothing.
+	// NoPatch means the run exists and produced no patch. A result, not an error.
 	NoPatch Outcome = "crs-no-patch"
-	// NoPoV means a patch exists with no reproducer, so nothing can attribute
-	// it. Ungradable by every stage that runs a PoV.
+	// NoPoV means a patch exists with no reproducer, so nothing can attribute it.
 	NoPoV Outcome = "crs-no-pov"
-	// Unpairable means patches and PoVs exist but no bundle ties them, so which
-	// patch claims to fix which crash is unknown.
+	// Unpairable means patches and PoVs exist but no bundle ties them.
 	Unpairable Outcome = "crs-unpairable"
 	// Malformed means an artifact is present and unreadable: an empty patch, a
 	// diff with no hunks, a bundle that does not parse.
 	Malformed Outcome = "crs-malformed-artifact"
-	// NoSanitizerReport means the run gave no sanitizer string to compare
-	// against. Written out empty it would make SanitizerFired
-	// strings.Contains(report, ""), true of everything, and the case would
-	// grade every candidate correct. Refused instead.
+	// NoSanitizerReport means no sanitizer string to compare against. Written
+	// out empty it matches every output, grading every candidate correct.
 	NoSanitizerReport Outcome = "crs-no-sanitizer-report"
 )
 
@@ -89,8 +71,7 @@ type Bundle struct {
 }
 
 // Source is what the case needs that the CRS output does not carry. A run
-// directory records what was produced, not what it was produced against, so the
-// pins come from the task that was submitted.
+// directory records what was produced, not what it was produced against.
 type Source struct {
 	Repo       string
 	BaseCommit string
@@ -102,15 +83,12 @@ type Source struct {
 	// ExpectedSanitizer is the literal report line the PoV produces, from the
 	// CRS's own trace. Not optional: see NoSanitizerReport.
 	ExpectedSanitizer string
-	// CrashLocation is what M3 compares against. Absent is tolerable — MatchSite
-	// returns undetermined — but it costs the site comparison.
+	// CrashLocation is what M3 compares against. Absent, MatchSite is undetermined.
 	CrashLocation string
 }
 
-// Capture reads one task's output and writes a corpus case for it.
-//
-// outDir receives the case file and copies of the artifacts, so the case is
-// self-contained and survives the CRS scratch being cleaned.
+// Capture reads one task's output and writes a corpus case for it. outDir gets
+// copies of the artifacts, so the case survives the CRS scratch being cleaned.
 func Capture(runDir, taskID string, src Source, outDir string) (Result, error) {
 	res := Result{TaskID: taskID}
 	task := filepath.Join(runDir, taskID)
@@ -133,9 +111,8 @@ func Capture(runDir, taskID string, src Source, outDir string) (Result, error) {
 	res.Evidence = append(res.Evidence,
 		fmt.Sprintf("%d patch(es), %d pov(s) under %s", len(patches), len(povs), task))
 
-	// Ordered so the operator is sent to the right place. No patch is a
-	// statement about the CRS; no PoV with a patch present is a statement about
-	// what can be graded.
+	// Ordered so the operator is sent to the right place: no patch is about
+	// the CRS, no PoV with a patch present is about what can be graded.
 	if len(patches) == 0 {
 		res.Outcome = NoPatch
 		res.Detail = "the run produced no patch, so there is nothing to grade"
@@ -212,9 +189,8 @@ func artifacts(task, kind, ext string) ([]string, error) {
 	return out, nil
 }
 
-// pair uses the CRS's bundle. With exactly one of each and no bundle the
-// pairing is unambiguous and allowed; with several it is a guess, and a guess
-// that is usually right is worse than a refusal.
+// pair uses the CRS's bundle. One patch and one PoV needs none; with several,
+// a guess that is usually right is worse than a refusal.
 func pair(task string, patches, povs []string) (string, string, string, error) {
 	bundles, err := artifacts(task, "bundles", ".json")
 	if err != nil {
@@ -234,9 +210,7 @@ func pair(task string, patches, povs []string) (string, string, string, error) {
 		}
 	}
 	if len(patches) == 1 && len(povs) == 1 {
-		// Unambiguous, but say which route was taken. Claiming the bundle here
-		// would overstate the provenance, and no real run has ever carried one:
-		// zero bundles across five captures.
+		// Say which route was taken; claiming the bundle overstates provenance.
 		return patches[0], povs[0], "paired as the only patch and the only pov; the run carried no bundle", nil
 	}
 	return "", "", "", fmt.Errorf(
@@ -244,33 +218,16 @@ func pair(task string, patches, povs []string) (string, string, string, error) {
 			"claims to fix which is unknown", len(patches), len(povs))
 }
 
-// looksLikeDiff decides whether a body is a unified diff a patch tool could
-// consume. It is a STRUCTURAL check and deliberately not an applies check:
-// Capture is given commits rather than a checkout, so "does this apply to the
-// tree" cannot be answered here without cloning one, and pretending otherwise
-// would put a network fetch inside a function that reads a directory.
-//
-// What changed and why. This was strings.Contains(b, "@@"), which a bare "@@"
-// passes while git apply refuses it with "No valid patches in input", so capture
-// accepted patches that could not apply and handed a gradable-looking case to
-// the gate. The verdict was still right and it arrived one stage late, blaming
-// the candidate at patch-does-not-apply for something capture could have named.
-//
-// The bound is worth stating because the yield data measured it: of 21 candidate
-// diffs the gate refused at apply, most failed on context lines that do not
-// exist in the source, which is fabrication and needs the tree to detect. This
-// catches the header, not the body. It moves one failure class earlier; it does
-// not make capture an oracle for applicability.
-//
-// No new outcome. A structurally broken diff is Malformed, which already means
-// exactly this, and inventing a seventh decline would claim capture can tell
-// something apart that it cannot.
+// looksLikeDiff is structural, not an applies check: Capture is given commits
+// rather than a checkout, so "does this apply" would mean cloning a tree inside
+// a function that reads a directory. Requiring the hunk ranges rejects a bare
+// "@@" that git apply refuses; diffs with fabricated context lines need the
+// tree and still reach the gate. A structurally broken diff is Malformed.
 func looksLikeDiff(b []byte) bool {
 	return hunkHeader.Match(b)
 }
 
-// @@ -old[,count] +new[,count] @@ — the ranges are the part that matters, since
-// their absence is what git apply rejects.
+// @@ -old[,count] +new[,count] @@. The ranges are what git apply needs.
 var hunkHeader = regexp.MustCompile(`(?m)^@@ -\d+(,\d+)? \+\d+(,\d+)? @@`)
 
 func write(outDir, taskID string, src Source, patch, pov []byte) (string, error) {
@@ -287,10 +244,8 @@ func write(outDir, taskID string, src Source, patch, pov []byte) (string, error)
 		return "", err
 	}
 
-	// expected_gate_reason is deliberately absent. A captured case has no
-	// answer key: whether the candidate is a fix is what the gate is being
-	// asked, and writing a guess here would make eval M0 grade the capture
-	// rather than the patch.
+	// expected_gate_reason is deliberately absent. Whether the candidate is a
+	// fix is what the gate is being asked; a guess would grade the capture.
 	c := fmt.Sprintf(`# Captured from a CRS run by pkg/crsout. Not hand-authored.
 #
 # kind: captured means this is a question, not an oracle. It carries no

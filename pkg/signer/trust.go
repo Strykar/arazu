@@ -32,8 +32,7 @@ func (t TrustStore) Get(id KeyID) (TrustedKey, bool) {
 }
 
 // UnnamedCount reports how many provisioned keys carry no signer name. Each
-// one counts as its own person, so a deployment that wants two-person
-// control to mean two people should name them all.
+// counts as its own person, so name them all.
 func (t TrustStore) UnnamedCount() int {
 	n := 0
 	for _, k := range t.keys {
@@ -44,9 +43,8 @@ func (t TrustStore) UnnamedCount() int {
 	return n
 }
 
-// HardwareBackedCount reports how many provisioned keys live on a security
-// key. The demo prints it, because "two provisioned signers" and "two
-// provisioned signers, both on tokens" are different claims.
+// HardwareBackedCount reports how many provisioned keys live on a security key.
+// "Two provisioned signers" and "two, both on tokens" are different claims.
 func (t TrustStore) HardwareBackedCount() int {
 	n := 0
 	for _, k := range t.keys {
@@ -59,13 +57,11 @@ func (t TrustStore) HardwareBackedCount() int {
 
 // LoadTrustStore reads a provisioned-keys file. Three line shapes:
 //
-//	<keyid> <base64 ed25519 pubkey>          the spike's software format
-//	ssh-ed25519 <base64> [comment]           an OpenSSH software key
-//	sk-ssh-ed25519@openssh.com <base64> ...  a FIDO2 security key
+//	<keyid> <base64 ed25519 pubkey> [signer]  the spike's software format
+//	ssh-ed25519 <base64> [comment]            an OpenSSH software key
+//	sk-ssh-ed25519@openssh.com <base64> ...   a FIDO2 security key
 //
-// The SSH shapes are exactly what ssh-keygen writes into a .pub file, so a
-// signer can paste theirs in without reformatting, and a reformatting step
-// is one more place to make a mistake with a key.
+// The SSH shapes are exactly what ssh-keygen writes into a .pub file.
 func LoadTrustStore(path string) (TrustStore, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -98,10 +94,8 @@ func LoadTrustStore(path string) (TrustStore, error) {
 	return ts, nil
 }
 
-// signerName takes the provisioning comment as the person's name, falling
-// back to the key id. The fallback is deliberately not collapsible with any
-// other key: an unnamed key cannot be known to belong to the same person as
-// another one, so it counts separately and UnnamedCount reports it.
+// signerName takes the provisioning comment as the person's name, falling back
+// to the key id. An unnamed key must not collapse with any other.
 func signerName(rest []string, id KeyID) (string, bool) {
 	name := strings.TrimSpace(strings.Join(rest, " "))
 	if name == "" {
@@ -126,9 +120,7 @@ func parseTrustLine(line string) (TrustedKey, error) {
 		if strings.HasPrefix(fields[0], "sk-") {
 			alg = AlgSKEd25519
 		}
-		// Keep only the type and the blob for verification. The comment
-		// field names the signer: it is provisioning data the high side
-		// wrote, not anything that arrives with a signature.
+		// Only the type and blob verify; the comment field names the signer.
 		k := TrustedKey{ID: id, Alg: alg, SSHLine: fields[0] + " " + fields[1]}
 		k.Signer, k.NamedSigner = signerName(fields[2:], id)
 		return k, nil
@@ -173,16 +165,8 @@ func parseTrustLine(line string) (TrustedKey, error) {
 }
 
 // VerifyAll checks every signature over msg and returns the distinct trusted
-// signers that verified.
-//
-// The two-person rule is over distinct people, not over signature count, not
-// per key and not per backend. One person holding a software key and a token
-// is still one person, and the provisioning file's signer names are what let
-// the gate see that rather than counting two key ids as two people.
-//
-// It only works for keys the provisioning file names. An unnamed key falls
-// back to its own id and so counts as its own person; TrustStore.UnnamedCount
-// reports how many are in that state.
+// signers that verified. It counts people, not signatures or keys: one person
+// with a software key and a token is still one person.
 func VerifyAll(msg, sigFile []byte, trust TrustStore, minDistinct int) ([]TrustedKey, error) {
 	seenKey := map[KeyID]bool{}
 	seenSigner := map[string]bool{}
@@ -211,8 +195,7 @@ func VerifyAll(msg, sigFile []byte, trust TrustStore, minDistinct int) ([]Truste
 				ErrDuplicateSigner, sig.KeyID)
 		}
 		// Counting keys rather than people would let one person holding two
-		// tokens satisfy two-person control alone, which is the whole thing
-		// two-person control exists to prevent.
+		// tokens satisfy two-person control alone.
 		who := key.SignerIdentity()
 		if seenSigner[who] {
 			return nil, fmt.Errorf("%w: %s signed the manifest with more than one key",

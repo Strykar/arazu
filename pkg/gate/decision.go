@@ -8,18 +8,11 @@
 // and observed, never because a model was confident, so a Decision carries the
 // evidence each stage produced and the reason the first failing stage gave.
 //
-// Two schema rules are load-bearing rather than bookkeeping.
-//
-// A REJECT must name a reason that some stage actually produced. Grading on
-// accept/reject alone would pass a gate that had been broken into rejecting
-// everything, so the reason is checked against the stage results rather than
-// taken on trust from whoever built the Decision.
-//
-// An accepted Decision must say what it could not prove. Sanitizer-gated
-// reachability is an operational proxy and not an unreachability proof, and a
-// semantic change with no sanitizer signal is invisible to every stage here.
-// Making that section structurally mandatory is the difference between a gate
-// that reports residual uncertainty and one that implies it has none.
+// Two schema rules are load-bearing. A REJECT must name a reason some stage
+// actually produced, checked against the stage results rather than trusted, or a
+// gate broken into rejecting everything would still grade well. And a Decision
+// must say what it could not prove, which is what separates a gate that reports
+// residual uncertainty from one that implies it has none.
 package gate
 
 import (
@@ -33,14 +26,10 @@ import (
 
 var ErrMalformedDecision = errors.New("decision-malformed")
 
-// Verdict is three-valued, and the third value is not a formality.
-//
-// REJECT asserts the patch failed a check. ERROR says nothing was demonstrated,
-// so there is nothing to accept or refuse — the patch was not tested, it did not
-// fail. Collapsing the two would put "your patch is wrong" in front of an
-// operator whose patch is fine and whose harness is broken. The ingress gate
-// already draws this line: audit-log-unavailable exits 2 as an ERROR rather than
-// counting as an eleventh rejection class.
+// Verdict is three-valued. REJECT asserts the patch failed a check; ERROR says
+// nothing was demonstrated, so the patch was not tested rather than found
+// wanting. Collapsed, an operator with a sound patch and a broken harness is
+// told the patch is wrong.
 type Verdict string
 
 const (
@@ -63,12 +52,9 @@ const (
 	OutcomeUndecided Outcome = "undecided"
 )
 
-// StageResult is what one stage observed.
-//
-// Evidence is what was run and seen, in a form a reviewer can check against the
-// artefacts. A stage that passes without evidence is indistinguishable from a
-// stage that did not run, which is the failure the whole gate exists to avoid,
-// so Validate refuses it.
+// StageResult is what one stage observed. Evidence is what was run and seen, in
+// a form a reviewer can check against the artefacts: a stage passing without it
+// is indistinguishable from one that never ran, so Validate refuses that.
 type StageResult struct {
 	Stage    string   `json:"stage"`
 	Outcome  Outcome  `json:"outcome"`
@@ -76,7 +62,6 @@ type StageResult struct {
 	Evidence []string `json:"evidence"`
 }
 
-// Decision is the gate's output for one candidate against one case.
 // Artifact is a file the decision was reached from, carried inside the dossier.
 type Artifact struct {
 	// Role says what the file was to this decision: candidate-patch, pov, case.
@@ -86,6 +71,7 @@ type Artifact struct {
 	SHA256 string `json:"sha256"`
 }
 
+// Decision is the gate's output for one candidate against one case.
 type Decision struct {
 	CaseID      string `json:"case_id"`
 	CandidateID string `json:"candidate_id"`

@@ -21,16 +21,12 @@ import (
 // docker_image that is pulled rather than built. nginx is this shape.
 //
 // An oss-fuzz target is a bare upstream checkout. Its project.yaml is
-// upstream's own metadata with no docker_image at all, because oss-fuzz builds
-// the image from separate tooling. libpng is this shape, and the case records
-// the tooling in fuzz_tooling_*.
+// upstream's own metadata with no docker_image, because oss-fuzz builds the
+// image from separate tooling. libpng is this shape, and the case records the
+// tooling in fuzz_tooling_*.
 //
-// sweep.go used to assume the first, with Src pinned to "src/nginx" and a
-// single-key scan for docker_image. That is one target hardcoded, not an
-// adapter.
-//
-// Anything matching neither is REFUSED. A driver that guesses a layout grades
-// something, and what it graded is the one thing the verdict does not say.
+// Anything matching neither is REFUSED. A driver that guesses a layout still
+// grades something, and what it graded is what the verdict does not say.
 type shape int
 
 const (

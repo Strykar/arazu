@@ -77,33 +77,21 @@ const (
 	// fix to. The degenerate case of revert-to-attribute, caught before any
 	// stage spends compute on it.
 	ReasonEmptyPatch = "empty-patch"
-	// M1, first question: the PoV did not fire on the PRE-patch build, so the
-	// case demonstrates no vulnerability and no patch can be credited with
-	// fixing one. This is an ERROR, not a REJECT: the patch was not tested, it
-	// did not fail. The fault is in the reproduction — wrong build flags, a
-	// sanitizer not enabled, an input that never reaches the sink — so the
-	// reason has to route an operator to the harness rather than to the patch.
-	// Naming it revert-attribute-fail would be correct only by luck: they would
-	// find the real fault eventually, after first satisfying themselves that a
-	// sound patch was sound.
+	// M1: the PoV did not demonstrate the declared vulnerability on the
+	// pre-patch build, so nothing can be credited with fixing it. ERROR rather
+	// than REJECT — the fault is in the reproduction, so it routes an operator
+	// to the harness and not to the patch.
 	ReasonPoVNotReproduced = "pov-not-reproduced"
-	// M1: the candidate does not apply to the tree at the pin. A REJECT rather
-	// than an ERROR, because nothing is undecided — a patch that cannot be
-	// applied cannot be a fix, and that is a determination. The check ran
-	// perfectly; the fact established is about the candidate, so the operator
-	// belongs at the patch.
+	// M1: the candidate does not apply to the tree at the pin. A REJECT, since a
+	// patch that cannot be applied cannot be a fix, and that is a determination
+	// about the candidate.
 	//
-	// Only reachable once the tree is known to be at the pin. "Does not apply
-	// because the tree was left dirty" is an infrastructure fault wearing the
-	// candidate's clothes, and must surface as a plumbing error instead.
+	// Only sound once the tree is known to be at the pin: "does not apply
+	// because the tree was left dirty" must surface as a plumbing error instead.
 	ReasonPatchDoesNotApply = "patch-does-not-apply"
-	// M1: a sanitizer fired after the patch, but the report cannot be matched
-	// against the declared crash site — an inlined frame, or a report naming no
-	// comparable location. An ERROR reason: whether this is the same
-	// vulnerability or a different one is undetermined, and answering either way
-	// would invent a verdict. Rejecting for revert-attribute-fail would blame a
-	// patch that may have worked; rejecting for new-sanitizer-finding would
-	// manufacture a second bug out of an optimisation setting.
+	// M1: a sanitizer fired after the patch but the report cannot be matched
+	// against the declared crash site, so whether it is the same vulnerability is
+	// undetermined. ERROR: deciding either way would invent a verdict.
 	ReasonPoVSiteUndetermined = "pov-site-undetermined"
 	// M1, second question: the PoV fires before the patch, but reverting the
 	// patch alone does not bring it back, so nothing attributes the fix to it.
@@ -112,10 +100,8 @@ const (
 	// in its class is not.
 	ReasonClassReplayFail = "class-replay-fail"
 	// M2: the case defines no falsifying class, so there is nothing to replay.
-	// An ERROR reason and not a rejection — the patch was not tested by this
-	// stage, it did not fail it. The schema already treats a missing class as
-	// gradable by the other stages, and this makes that visible in the verdict
-	// rather than leaving the stage silently absent from the record.
+	// ERROR, not a rejection, and recorded so the stage is not silently absent
+	// from the verdict.
 	ReasonClassNotDefined = "class-not-defined"
 	// The class was replayed short of its declared size. A divergence found in
 	// a subset is still a divergence, so REJECT stands; an absence of
@@ -127,54 +113,30 @@ const (
 	// M3, sanitizer-gated reachability: the patched build reports something the
 	// unpatched one did not.
 	//
-	// Reachability is asserted AGAINST THE CONFIGURATION UNDER TEST, never in
-	// general, and the dossier must say so. cpv2's sink is reached only because
-	// the access log format references $remote_user; drop that one variable and
-	// no input reaches it, with no source change. So "no input in the class
-	// reaches the sink" describes a deployment, not the code.
+	// Reachability is asserted against the configuration under test, never in
+	// general: cpv2's sink is reached only because the access log format
+	// references $remote_user, so it describes a deployment and not the code.
 	//
-	// PRECONDITION, invisible unless stated: ASan halts on the first error unless
-	// the target was built with -fsanitize-recover=address. Without it,
-	// ASAN_OPTIONS=halt_on_error=0 is accepted and INERT, so a report missing the
-	// original site is evidence of nothing.
-	//
-	// Surviving that once rested on execution order -- the new finding ran after
-	// the original, so reaching it proved the original had not fired. That works
-	// in one direction only. Build with -fsanitize-recover=address, or make the
-	// ordering argument explicitly every time.
+	// PRECONDITION: the target must be built with -fsanitize-recover=address.
+	// Without it ASan halts on the first error, ASAN_OPTIONS=halt_on_error=0 is
+	// accepted and inert, and a report missing the original site proves nothing.
 	ReasonNewSanitizerFinding = "new-sanitizer-finding"
 	// The functional counterpart: a test that passed before the patch fails
-	// after it. Both are a set difference against a baseline, and they are kept
-	// apart because they are different evidence. A sanitizer finding is a
-	// memory-safety claim from instrumentation; this is a behavioural claim from
-	// the project's own suite, and a dossier that named the wrong one would send
-	// a reviewer looking for sanitizer output that was never produced.
-	//
-	// This is the reason the challenge's own bad patches actually fall to: all
-	// three calibrated so far stop the crash and break a passing test, and none
-	// produce a new sanitizer finding. A label of regression-introducing maps to
-	// whichever of the two was observed by running it, never to an assumption.
+	// after it. Kept apart from a sanitizer finding because they are different
+	// evidence — instrumentation versus the project's own suite — and a dossier
+	// naming the wrong one sends a reviewer looking for output never produced.
 	ReasonNewTestFailure = "new-test-failure"
 	// M2, differential against the pre-patch build: an input that did NOT crash
 	// before the patch behaves differently after it.
 	//
-	// An ERROR reason, not a rejection, and the word in the middle is doing the
-	// work. The differential is an oracle for CHANGE, not for correctness: a
-	// legitimate fix may tighten validation and alter behaviour on inputs that
-	// never crashed. libpng run 2 was wrong because removing iCCP support is
-	// wrong for libpng, and that judgement came from a human reading the diff,
-	// not from the differential noticing a difference.
+	// ERROR, not a rejection: the differential is an oracle for CHANGE, not for
+	// correctness, and a legitimate fix may tighten validation on inputs that
+	// never crashed. Rejecting would assert a fault it has not established;
+	// accepting would discard the most interesting thing in the run.
 	//
-	// So the gate surfaces it and routes it, and does not decide it. Rejecting
-	// would assert a fault it has not established; accepting would discard the
-	// most interesting thing in the run. The verdict is undecided, with the
-	// differing inputs and their before/after output in the dossier, for a human
-	// to adjudicate.
-	//
-	// This constant is also the guard against a claim drifting upward. As long
-	// as the reason is named unadjudicated, "the gate surfaces unintended change
-	// for review" cannot quietly become "the gate detects wrong patches",
-	// because the code says otherwise.
+	// The name is also the guard against the claim drifting upward. While the
+	// reason says unadjudicated, "surfaces unintended change for review" cannot
+	// quietly become "detects wrong patches".
 	ReasonUnadjudicatedBehaviourChange = "unadjudicated-behaviour-change"
 	// M4, non-determinism control: the candidate passes on some repeats and
 	// fails on others.
@@ -197,30 +159,19 @@ type Source struct {
 	SrcRef    string `yaml:"src_ref"`
 	SrcCommit string `yaml:"src_commit"`
 
-	// The harness build inputs, for targets whose fuzz tooling lives outside the
-	// challenge repo. libpng is the case that forced these: it is a bare source
-	// tree, and libpng_read_fuzzer is built from a separate oss-fuzz checkout, so
-	// nothing in cp_*/src_* names what actually produces the binary under test.
+	// The tree BEFORE the change under test. The CRS diffs base..head, so a task
+	// with base == head asks it to analyse an empty diff.
 	//
-	// Recorded here rather than in prose so scripts/stage-corpus.sh can DERIVE
-	// what to clone instead of carrying its own copy of these facts. A staging
-	// script with a hardcoded list is a second source of truth that agrees until
-	// a case changes.
-	//
-	// Empty for challenges that carry their own build, which is the AIxCC CP
-	// shape nginx uses.
-	// The tree BEFORE the change under test. The CRS diffs base..head to know
-	// what changed, so submitting a task with base == head asks it to analyse a
-	// diff that is empty. libpng forced this too: its base is recorded in the
-	// task the CRS was actually given and was sitting in a comment here, where
-	// scripts/buttercup-task.sh could not read it and silently used the head
-	// commit for both.
-	//
-	// Optional: a target with no meaningful "before" (fuzz the whole tree) sets
-	// base and head to the same ref deliberately, which is different from
-	// defaulting to it by accident.
+	// Optional: a target with no meaningful "before" sets base and head to the
+	// same ref deliberately, which differs from defaulting to it by accident.
 	BaseCommit string `yaml:"base_commit"`
 
+	// Where the harness is built from, for targets whose fuzz tooling lives
+	// outside the challenge repo. libpng is a bare source tree and
+	// libpng_read_fuzzer comes from a separate oss-fuzz checkout, so cp_*/src_*
+	// name nothing that produces the binary under test. Recorded here so
+	// scripts/stage-corpus.sh derives what to clone rather than keeping a second
+	// copy. Empty for challenges that carry their own build.
 	FuzzToolingRepo    string `yaml:"fuzz_tooling_repo"`
 	FuzzToolingRef     string `yaml:"fuzz_tooling_ref"`
 	FuzzToolingCommit  string `yaml:"fuzz_tooling_commit"`
@@ -229,24 +180,18 @@ type Source struct {
 
 // PoV is the proof of vulnerability.
 //
-// Signal names where the verdict is read from. It is a field rather than a
-// constant because the challenge's container exits zero whether or not the
-// vulnerability fires, so a gate keyed on the exit code would accept every
-// candidate patch. Recording where the truth lives keeps that decision with
-// the case instead of hard-coded in the runner.
+// Signal names where the verdict is read from. A field rather than a constant
+// because the container exits zero whether or not the vulnerability fires, so a
+// gate keyed on the exit code would accept everything.
 type PoV struct {
 	Input string `yaml:"input"`
-	// Sanitizer names the build ExpectedSanitizer belongs to. Without it the
-	// expected string is uncheckable rather than merely imprecise: libpng's
-	// declared "runtime error: index 41 out of bounds" is a UBSan message and
-	// does not appear at all in an ASan build, where the same defect reports as
-	// "dynamic-stack-buffer-overflow". The truth of the field depended on a
-	// configuration nothing recorded.
+	// Sanitizer names the build ExpectedSanitizer belongs to, without which the
+	// expected string is uncheckable: libpng's "runtime error: index 41 out of
+	// bounds" is a UBSan message that never appears in an ASan build, where the
+	// same defect reports as "dynamic-stack-buffer-overflow".
 	//
-	// Optional, and deliberately not added to validate()'s required set: the
-	// nginx cases predate it and declaring it required would fail fifteen cases
-	// to fix one. Empty means "not recorded", which is honest, rather than
-	// defaulting to address and inventing a fact.
+	// Optional and deliberately not in validate()'s required set. Empty means
+	// "not recorded" rather than defaulting to address and inventing a fact.
 	Sanitizer         string `yaml:"sanitizer"`
 	ExpectedSanitizer string `yaml:"expected_sanitizer"`
 	CrashLocation     string `yaml:"crash_location"`
@@ -296,11 +241,10 @@ func joinRoot(root, p string) string {
 // FalsifyingClass is the set of inputs a fix has to survive, not just the one
 // that crashed.
 //
-// A patch is only credited with fixing a vulnerability if the whole class stops
-// reaching the sink, because handling the single crashing input is exactly what
-// an incomplete fix does well. Generator runs and reports; a case without one
-// can be graded by stages M1 and M3 but not by class replay, so its absence is
-// recorded rather than treated as "no class exists".
+// A patch earns credit only if the whole class stops reaching the sink, since
+// handling the single crashing input is what an incomplete fix does well. A case
+// without one is gradable by M1 and M3, so its absence is recorded rather than
+// read as "no class exists".
 type FalsifyingClass struct {
 	// Description says what varies across the class, in a sentence a reviewer
 	// can check against the generator.
@@ -311,29 +255,23 @@ type FalsifyingClass struct {
 	// when the class is replayed, so a green run cannot be read as agreement.
 	Discriminator string `yaml:"discriminator"`
 	// Observer is a runnable that PRODUCES the observation the discriminator
-	// names. A schema that says how to build the class and not what to look at
-	// expresses half a contract.
-	//
-	// It exists because the fuzz harness is silent by construction:
-	// libpng_read_fuzzer calls png_image_finish_read and discards diagnostics,
-	// so replaying the class through it found zero disagreements across all 79
-	// members and ACCEPTED the known-incomplete fix. The channel could not carry
-	// the discriminator, which is a blind instrument rather than agreement.
+	// names, because a fuzz harness is silent by construction: replaying the
+	// class through libpng_read_fuzzer found zero disagreements across all 79
+	// members and accepted the known-incomplete fix. Zero disagreements on a
+	// channel that cannot carry the discriminator is a blind instrument, not
+	// agreement.
 	//
 	// Contract: run once per replay as
 	//     observer <source-tree> <members-dir>
-	// printing one "<member>\t<observation>" line per member. The script owns
-	// building and running, the same way generator owns making the class,
-	// because only the case knows what its discriminator looks at.
+	// printing one "<member>\t<observation>" line per member. Only the case
+	// knows what its discriminator looks at, so the script owns building and
+	// running, as generator owns making the class.
 	Observer string `yaml:"observer"`
 }
 
-// PatchRoot says which tree a candidate's patch path is relative to. The
-// challenge's own candidates live inside its checkout; the ones we synthesise
-// live in this repository, under version control where work product belongs.
-// Recording which is explicit rather than inferred, because a path that
-// resolves against the wrong root either fails to open or, worse, opens a
-// different patch and grades it as this one.
+// PatchRoot says which tree a candidate's patch path is relative to. Explicit
+// rather than inferred: a path resolved against the wrong root either fails to
+// open or, worse, opens a different patch and grades it as this one.
 const (
 	PatchRootChallenge = "challenge"
 	PatchRootRepo      = "repo"
@@ -362,12 +300,9 @@ type Case struct {
 	Target   string `yaml:"target"`
 	Harness  string `yaml:"harness"`
 
-	// Root is the tree this case's paths resolve against by default. The
-	// challenge's own cases live in its checkout; the libpng case is entirely
-	// ours and lives here. A per-path override exists for the mixed case — an
-	// nginx case whose shipped candidates are in the challenge tree and whose
-	// synthesised ones are in this repository — but a case that is wholly one
-	// or the other says so once rather than on every line.
+	// Root is the tree this case's paths resolve against by default, so a case
+	// that is wholly one or the other says so once rather than on every line.
+	// Per-path overrides exist for cases that mix the two.
 	Root string `yaml:"root,omitempty"`
 
 	Source         Source      `yaml:"source"`
@@ -384,12 +319,9 @@ type Case struct {
 	Path string `yaml:"-"`
 }
 
-// Validate refuses a case the gate cannot be graded on.
-//
-// This is deliberately strict. A case missing its expected sanitizer would
-// still run, and every candidate would be judged against an empty string,
-// which passes for anything. The corpus is the oracle; an oracle that does
-// not know the answer silently grades everything correct.
+// Validate refuses a case the gate cannot be graded on. Deliberately strict:
+// the corpus is the oracle, and an oracle that does not know the answer grades
+// everything correct.
 func (c Case) Validate() error {
 	var missing []string
 	need := map[string]string{
@@ -399,15 +331,12 @@ func (c Case) Validate() error {
 		"pov.expected_sanitizer": c.PoV.ExpectedSanitizer,
 	}
 	// reference_patch is M2's precondition, not the format's. A hand-authored
-	// case is an ORACLE and must carry its answer; a case captured from a CRS
-	// run is the QUESTION, and has no known-good fix by construction — that is
-	// what makes it a novel target. Requiring one here made reference-free
-	// cases unrepresentable, so the reference-free stages had nothing to grade.
+	// case is an ORACLE and carries its answer; one captured from a CRS run is
+	// the QUESTION and has no known-good fix, which is what makes it novel.
 	//
-	// expected_sanitizer stays required for both. Without it SanitizerFired is
-	// strings.Contains(report, ""), which is true of everything, and the case
-	// grades every candidate correct. A capture that cannot determine it is
-	// refused at capture time rather than written out empty.
+	// expected_sanitizer stays required for both: without it SanitizerFired is
+	// strings.Contains(report, ""), true of everything, and the case grades every
+	// candidate correct.
 	if c.Kind != KindCaptured {
 		need["reference_patch"] = c.ReferencePatch
 	}

@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package egress creates the contained network namespace and attaches the
-// kernel-enforced egress denial to it.
-//
-// The namespace is the primary control: with only loopback up and no veth,
-// there is no path off the box at all. The BPF program is defence in depth,
-// and it exists mostly so the two layers can be told apart at run time.
+// kernel-enforced egress denial to it. The namespace is the primary control:
+// only lo, no veth, so no path off the box exists. The BPF program is defence
+// in depth.
 package egress
 
 import (
@@ -37,10 +35,8 @@ func run(argv ...string) error {
 	return nil
 }
 
-// netnsInodeOfPath returns the namespace inode behind a nsfs path.
-//
-// The nsfs inode number is what struct net's ns.inum holds, which is what
-// the BPF program compares against.
+// netnsInodeOfPath returns the namespace inode behind a nsfs path. This is
+// struct net's ns.inum, the value the BPF program compares against.
 func netnsInodeOfPath(path string) (uint32, error) {
 	var st syscall.Stat_t
 	if err := syscall.Stat(path, &st); err != nil {
@@ -49,29 +45,11 @@ func netnsInodeOfPath(path string) (uint32, error) {
 	return uint32(st.Ino), nil
 }
 
-// CreateNetns creates a named network namespace with only loopback up.
-//
-// A named namespace is used rather than unshare so the inode is readable
-// from its bind mount before any workload starts. Attaching the deny
-// program to a known inode first is what removes the window in which the
-// workload would run uncontained.
-//
-// No veth pair is created, on purpose. With no interface but lo there is no
-// route out, and "no path exists" is a stronger claim than "a path exists
-// and something blocks it".
-// OpenOrCreate returns the named namespace, creating it only if it is absent,
-// and does NOT delete it on Close.
-//
-// This exists so a model server can live inside the boundary across many
-// analysis runs. `ip netns add` makes a filesystem-backed namespace at
-// /var/run/netns/<name> that outlives the process that created it, and
-// netnsInodeOfPath reads the inode from that path — so a process joining later
-// gets the SAME inode the BPF policy is keyed on. That identity is the whole
-// mechanism: without it the model would sit in a different namespace and the
-// policy would not apply to it.
-//
-// The caller is responsible for removing a persistent namespace. CleanupStale
-// still does it by name.
+// OpenOrCreate returns the named namespace, creating it only if absent, and
+// does not delete it on Close. The namespace at /var/run/netns/<name> outlives
+// the process that made it, so a model server joining later lands on the same
+// inode the BPF policy is keyed on, not in one the policy never covers. The
+// caller removes it; CleanupStale still does it by name.
 func OpenOrCreate(name string) (*Netns, error) {
 	path := filepath.Join("/var/run/netns", name)
 	if _, err := os.Stat(path); err == nil {
@@ -89,6 +67,10 @@ func OpenOrCreate(name string) (*Netns, error) {
 	return ns, nil
 }
 
+// CreateNetns creates a named network namespace with only loopback up. Named
+// rather than unshare, so the inode is readable before any workload starts and
+// the deny program attaches first. No veth: with only lo there is no route out
+// to block.
 func CreateNetns(name string) (*Netns, error) {
 	if err := run("ip", "netns", "add", name); err != nil {
 		return nil, err
@@ -116,16 +98,14 @@ func (n *Netns) Exec(ctx context.Context, argv []string) (stdout, stderr []byte,
 	err = cmd.Run()
 	code = cmd.ProcessState.ExitCode()
 
-	// A non-zero exit is information here, not a failure to report. The
-	// probe is expected to fail inside containment.
+	// A non-zero exit is expected inside containment, so it is not an error.
 	if _, ok := err.(*exec.ExitError); ok {
 		err = nil
 	}
 	return out.Bytes(), errb.Bytes(), code, err
 }
 
-// HostNetnsInode returns the inode of the host network namespace, for tests
-// that need to prove the contained namespace is a different one.
+// HostNetnsInode returns the inode of the host network namespace.
 func HostNetnsInode() (uint32, error) {
 	return netnsInodeOfPath("/proc/1/ns/net")
 }
@@ -135,11 +115,8 @@ func (n *Netns) Close() error {
 		return nil
 	}
 	if n.keep {
-		// A persistent namespace outlives the run that used it. Deleting it
-		// here would take the model server down with it and, worse, the next
-		// run would get a DIFFERENT inode — so the policy would be attached to
-		// one namespace and the workload would be in another, which looks
-		// exactly like containment working.
+		// Deleting a shared namespace takes the model server down and gives the
+		// next run a different inode, which still looks contained.
 		n.Name = ""
 		return nil
 	}
@@ -148,8 +125,8 @@ func (n *Netns) Close() error {
 	return err
 }
 
-// CleanupStale removes a leftover namespace of the given name, so a crashed
-// run does not block the next one.
+// CleanupStale removes a leftover namespace so a crashed run does not block
+// the next one.
 func CleanupStale(name string) {
 	if _, err := os.Stat(filepath.Join("/var/run/netns", name)); err == nil {
 		_ = run("ip", "netns", "del", name)

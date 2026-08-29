@@ -12,25 +12,12 @@ import (
 	"arazu/pkg/gate"
 )
 
-// Making a verdict survive the process that reached it.
+// writeDecision puts the verdict in the bundle so the seal can bind it.
 //
-// The gate used to marshal a Decision to stdout and set an exit code, and that
-// was all. Two consequences, both silent, both found by inspection before the
-// first integration run rather than during it:
-//
-//   - Nothing in contentstore, manifest or bundle-sign had any notion of a
-//     decision, so sealing could not bind the verdict. Not "the seal missed it"
-//     — there was no artifact to miss.
-//   - The gate never appended to the audit log, so a run produced a hash-chained
-//     log that verifies clean and contains no evidence a verdict was reached. A
-//     passing verifier over an incomplete record is worse than a failing one.
-//
-// ORDER IS THE WHOLE RISK for the first of those. ContentRoot hashes whatever
-// MeasureBundle scanned, so a decision written into the bundle BEFORE
-// measurement is covered for free and needs no change to the manifest format.
-// Written after, it sits in the directory, outside the root, and every check
-// still passes. writeDecision is therefore called before anything measures, and
-// says so, because nothing in the type system enforces it.
+// ORDER IS THE WHOLE RISK. ContentRoot hashes whatever MeasureBundle scanned, so
+// a decision written BEFORE measurement is covered for free. Written after, it
+// sits outside the root and every check still passes. Nothing in the type system
+// enforces this.
 func writeDecision(bundleDir string, d gate.Decision, sources map[string]string) (gate.Decision, string, error) {
 	if bundleDir == "" {
 		return d, "", nil

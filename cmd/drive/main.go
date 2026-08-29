@@ -2,21 +2,15 @@
 
 // drive joins a CRS run to the gate.
 //
-// crsout turns what Buttercup left on disk into a gradable case; the gate
-// reaches a verdict; the envelope binds that verdict to measured state. All
-// three existed and nothing called them in sequence, so "found, patched and
-// verified, unattended" had no single entry point.
+// crsout turns what Buttercup left on disk into a gradable case, the gate
+// reaches a verdict, and the envelope binds that verdict to measured state.
 //
-// It composes the built binaries rather than reimplementing their wiring. The
-// stage chain lives in cmd/gate and duplicating it here would be a second copy
-// that agrees until one of them changes.
+// It composes the built binaries rather than reimplementing their wiring: the
+// stage chain lives in cmd/gate, and a second copy agrees until one changes.
 //
-// FOUR OUTCOMES, NOT THREE. The gate is three-valued over a candidate:
-// ACCEPT, REJECT, ERROR. This adds DECLINE, for a run that gave it nothing to
-// grade. Folding crs-no-patch into REJECT would report that the CRS produced a
-// bad patch when it produced none, which sends an operator to the wrong
-// artifact. A decline is still logged: a run that produced nothing must leave
-// the same kind of record as one that produced something.
+// FOUR OUTCOMES, NOT THREE. DECLINE is added for a run that gave the gate
+// nothing to grade. Folding that into REJECT would report a bad patch where
+// there was none. A decline is still logged, like any other outcome.
 package main
 
 import (

@@ -9,18 +9,10 @@ import (
 )
 
 // CrashSite is a sanitizer report location reduced to the parts a toolchain
-// does not vary.
-//
-// File is a base name, not a path: the challenge reports container paths like
-// /src/harnesses/bld/src/core/ngx_string.c, and the prefix is a property of
-// where the build ran. Function survives what Line and Column do not.
-//
-// Line is deliberately absent. It shifts for two independent reasons, both
-// demonstrated on this corpus: a patch that adds lines above the site moves it,
-// and enabling -fsanitize-recover=address made one bug report at 1328, 1329 and
-// 1330 in a single run, because recovery let execution continue into adjacent
-// writes. Column shifts with the compiler. A discriminator has to be invariant
-// to everything the experiment varies, and the experiment varies both.
+// does not vary. File is a base name because the reported path records where
+// the build ran. Line and Column are absent: a patch above the site moves the
+// line, -fsanitize-recover=address reports one bug at adjacent lines, and the
+// column moves with the compiler.
 type CrashSite struct {
 	File     string
 	Function string
@@ -30,20 +22,16 @@ func (s CrashSite) String() string { return s.Function + " (" + s.File + ")" }
 
 func (s CrashSite) empty() bool { return s.File == "" && s.Function == "" }
 
-// SiteMatch is three-valued for the same reason the gate's verdict is: the
-// comparison can fail to determine an answer, and calling that "different"
+// SiteMatch is three-valued: calling an undetermined comparison "different"
 // would manufacture a finding out of an optimisation setting.
 type SiteMatch string
 
 const (
 	SiteSame   SiteMatch = "same"
 	SiteDiffer SiteMatch = "different"
-	// The report cannot be compared to the declaration. The case that forces
-	// this is inlining: ASan names the frame it can attribute, so a small
-	// function inlined into its caller is reported under the CALLER's name.
-	// Same bug, same file, different reported function. Treating that as a new
-	// crash site would let an optimisation flag produce a
-	// new-sanitizer-finding verdict.
+	// Not comparable. Inlining is what forces it: ASan reports an inlined
+	// function under its caller's name, and calling that a new site would let
+	// an optimisation flag produce a new-sanitizer-finding verdict.
 	SiteUndetermined SiteMatch = "undetermined"
 )
 
@@ -65,12 +53,8 @@ func ParseDeclaredSite(s string) CrashSite {
 }
 
 // ParseReportSites returns every site a sanitizer report names, summaries and
-// stack frames alike.
-//
-// Frames matter as much as summaries: when a function is inlined its name can
-// still appear in the stack even though the summary names the caller, so a
-// report that mentions the declared site anywhere is evidence the same code was
-// reached.
+// stack frames alike. Frames matter because an inlined function's name can
+// appear in the stack while the summary names its caller.
 func ParseReportSites(report string) []CrashSite {
 	var out []CrashSite
 	seen := map[CrashSite]bool{}
@@ -90,23 +74,14 @@ func ParseReportSites(report string) []CrashSite {
 	return out
 }
 
-// Prefixes a harness adds to symbol names when it instruments a build. oss-fuzz
-// renames the functions it wraps, so libpng's real reproduction reports
-// OSS_FUZZ_png_handle_iCCP for a case declaring png_handle_iCCP. That prefix is
-// a property of HOW the target was built, not of the function — the same reason
-// File is reduced to a base name and Line is absent entirely.
-//
-// Deliberately an explicit list rather than a pattern. Something like ^[A-Z_]+_
-// would also swallow a genuinely-named symbol, and a normaliser that eats real
-// differences turns a matcher which fails safe into one that manufactures
-// agreement — strictly worse, because SiteSame is the verdict that lets a patch
-// through. crashsite_prefix_test.go pins that: functions differing by more than
-// a known prefix must never compare equal, including ones wearing the prefix.
+// Prefixes a harness adds when it instruments a build: oss-fuzz reports
+// OSS_FUZZ_png_handle_iCCP for a case declaring png_handle_iCCP, a property of
+// how the target was built. An explicit list, not a pattern: something like
+// ^[A-Z_]+_ would swallow real differences, and SiteSame lets a patch through.
 var instrumentationPrefixes = []string{"OSS_FUZZ_"}
 
-// sameFunction compares symbols after removing instrumentation prefixes from
-// BOTH sides, so a declaration written against an instrumented build still
-// matches a report from one, and vice versa.
+// sameFunction compares symbols with instrumentation prefixes stripped from
+// both sides, so an instrumented report matches a plain declaration either way.
 func sameFunction(a, b string) bool {
 	strip := func(s string) string {
 		for _, p := range instrumentationPrefixes {
@@ -117,12 +92,9 @@ func sameFunction(a, b string) bool {
 	return strip(a) == strip(b)
 }
 
-// MatchSite decides whether a report shows the SAME vulnerability the case
-// declares, a DIFFERENT one, or cannot say.
-//
-// Fails safe in both directions. An unparseable declaration or an empty report
-// is undetermined rather than different, because "we could not tell" must never
-// be recorded as "this is a new bug".
+// MatchSite decides whether a report shows the same vulnerability the case
+// declares, a different one, or cannot say. An unparseable declaration or an
+// empty report is undetermined, never different.
 func MatchSite(declared CrashSite, report string) SiteMatch {
 	if declared.empty() {
 		return SiteUndetermined
@@ -140,9 +112,8 @@ func MatchSite(declared CrashSite, report string) SiteMatch {
 			sameFile = true
 		}
 	}
-	// Same file, different function: ambiguous between a genuinely different
-	// bug in the same file and the declared function having been inlined into
-	// its caller. Undetermined, and the operator gets both sites to look at.
+	// Same file, different function is ambiguous between a different bug and
+	// the declared function having been inlined into its caller.
 	if sameFile {
 		return SiteUndetermined
 	}

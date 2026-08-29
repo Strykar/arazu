@@ -3,20 +3,13 @@
 // Command gate decides whether a candidate patch has earned credit for fixing
 // a vulnerability in a corpus case.
 //
-// Exit codes are three-valued on purpose. ACCEPT is 0 and REJECT is 1, and a
-// rejection is a correct outcome rather than an error: refusing a wrong patch
-// is the thing this is for. Exit 2 means the gate could not decide, which must
-// never be confused with either, because a check that failed to run has
-// established nothing and fail-closed only means anything if it is visible.
+// Exit codes are three-valued. ACCEPT is 0, REJECT is 1 and is a correct
+// outcome rather than an error. Exit 2 means the gate could not decide, and a
+// check that failed to run has established nothing.
 //
-// Visible is not the same as fine. A guard that fails closed is still failing;
-// it just fails in the direction that does not hurt you. Exit 2 is a defect
-// report about the gate or the case, and treating it as the system working is
-// how a gradeable case sits broken while every verdict it produces is correct.
-//
-// M0 runs one stage. The falsification stages land on top of it in order, and
-// until they do the not-proven section says so rather than letting a bare
-// ACCEPT imply the whole bar was cleared.
+// Fail-closed is not the same as fine. Exit 2 is a defect report about the gate
+// or the case; treating it as the system working is how a gradeable case sits
+// broken while every verdict it produces is correct.
 package main
 
 import (

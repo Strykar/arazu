@@ -12,19 +12,12 @@ import (
 // namespace and attaching an LSM program both need it.
 const capSysAdmin = 21
 
-// HasSysAdmin reports whether this process can actually create a namespace,
-// rather than whether it merely looks like it can.
+// HasSysAdmin reports whether this process can create a network namespace.
 //
-// euid == 0 is NOT the same question and was the guard the tests used. A
-// container running as root has uid 0 and no CAP_SYS_ADMIN, so the guard
-// passed, the test proceeded, and `ip netns add` failed with "Operation not
-// permitted" — reported as a failure rather than a skip. Someone evaluating
-// this repo in a container therefore sees red where the honest answer is "this
-// machine cannot run that test".
-//
-// Reads the effective set from /proc/self/status, which is the kernel's own
-// answer. Falls back to the euid check where that is unreadable, because being
-// wrong in the direction of "attempt it" is better than skipping silently on a
+// euid == 0 is a different question: a container root has uid 0 and no
+// CAP_SYS_ADMIN, so guarding on it turns "this machine cannot run the test"
+// into a failed test. Reads the effective set from /proc/self/status, falling
+// back to euid where that is unreadable, since attempting beats skipping on a
 // machine that would have worked.
 func HasSysAdmin() bool {
 	b, err := os.ReadFile("/proc/self/status")
@@ -47,16 +40,9 @@ func HasSysAdmin() bool {
 
 // HasTPM reports whether a TPM character device is present and openable.
 //
-// The same question as HasSysAdmin, asked about hardware instead of privilege,
-// and it was the half nobody asked. The demo test guarded on CAP_SYS_ADMIN and
-// root and then sealed anyway, so on a machine with the privilege and no device
-// it did not skip: it ran, "seal provisioning failed", and the happy path was
-// reported as MISMATCH — an absent TPM presented as a wrong prediction. That is
-// what a cold boot in any VM without a vTPM shows.
-//
-// This does not weaken the TPM signal. check-env reports tpm-device on its own
-// row and the self-check prints it, so a machine that should have a TPM and
-// does not still fails loudly, in the place that is about the machine.
+// HasSysAdmin's question asked about hardware: sealing on a machine with the
+// privilege and no device reports MISMATCH where the honest answer is a skip.
+// check-env still fails tpm-device loudly on its own row.
 func HasTPM() bool {
 	for _, dev := range []string{"/dev/tpmrm0", "/dev/tpm0"} {
 		if f, err := os.OpenFile(dev, os.O_RDWR, 0); err == nil {

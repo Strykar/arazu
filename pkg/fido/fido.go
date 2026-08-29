@@ -1,20 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package fido verifies FIDO2 assertions used as manifest signatures.
-//
-// The software signing path proves that whoever holds a secret key file signed
-// the manifest. A hardware assertion proves more: that a specific enrolled
-// authenticator was physically present, and under a user-verification policy,
-// that the person who enrolled it verified themselves to it. That is the
-// difference between two-person control being a property of two files on a
-// disk and being a property of two people.
-//
-// It also has considerably more ways to go wrong than a raw signature, which
-// is the reason this package exists as its own thing with its own reason
-// codes. A raw ed25519 signature has one failure: it does not verify. An
-// assertion additionally carries a relying-party binding, a user-presence
-// flag, a user-verification flag, and a signature counter, and each of those
-// is a distinct attack that a check of the signature alone would pass.
+// Package fido verifies FIDO2 assertions used as manifest signatures. An
+// assertion proves an enrolled authenticator was physically present, and under
+// a user-verification policy that its holder verified themselves to it, so
+// two-person control is a property of two people, not of two key files. It
+// also carries a relying-party binding, presence and verification flags, and a
+// signature counter, each a separate attack a signature check alone passes.
 package fido
 
 import (
@@ -28,11 +19,9 @@ import (
 	"fmt"
 )
 
-// Reason strings the ingress gate reports for assertion failures. Each one is
-// a distinct thing an attacker did, not a shade of "signature bad", because an
-// operator's response differs: a counter regression means a cloned
-// authenticator and every credential it holds is suspect, while a relying-party
-// mismatch means a signature was harvested from some other service.
+// Reason strings the ingress gate reports. Distinct per failure because the
+// response differs: a counter regression means a cloned authenticator, an RP
+// mismatch a signature harvested elsewhere.
 var (
 	ErrUnknownCredential  = errors.New("fido-unknown-credential")
 	ErrBadSignature       = errors.New("fido-bad-signature")
@@ -44,16 +33,14 @@ var (
 	ErrMalformedAuthData  = errors.New("fido-malformed-authdata")
 	ErrAlgorithmMismatch  = errors.New("fido-algorithm-mismatch")
 
-	// Distinctness is over people. These mirror the software-key reasons
-	// deliberately: an operator reading a decision should not have to know
-	// which signing path produced it to understand what went wrong.
+	// Mirror the software-key reasons, so a decision reads the same whichever
+	// signing path produced it.
 	ErrDuplicateSigner     = errors.New("duplicate-signer")
 	ErrInsufficientSigners = errors.New("insufficient-signatures")
 )
 
-// Algorithm is the COSE algorithm a credential was enrolled with. It is
-// recorded per credential and enforced, so an assertion cannot be presented
-// under a different algorithm than the one the public key was registered for.
+// Algorithm is the COSE algorithm a credential was enrolled with. Enforced per
+// credential, so an assertion cannot be presented under a different one.
 type Algorithm string
 
 const (
@@ -62,27 +49,22 @@ const (
 )
 
 // clientDataDomain separates a manifest signature from every other assertion
-// the same authenticator might ever produce. Without it, an assertion the
-// token made to log in somewhere could be presented here, provided the
-// challenge happened to collide.
+// the same token produces, so a login assertion cannot be presented here.
 const clientDataDomain = "arazu-manifest-sig-v1\n"
 
 // authenticator data flags, from the CTAP2 spec.
 const (
-	flagUP = 0x01 // user present: someone physically touched the authenticator
-	flagUV = 0x04 // user verified: PIN or biometric was satisfied
-	flagAT = 0x40 // attested credential data is appended
-	flagED = 0x80 // extension data is appended
+	flagUP = 0x01 // user present: the authenticator was touched
+	flagUV = 0x04 // user verified: PIN or biometric satisfied
+	flagAT = 0x40 // attested credential data appended
+	flagED = 0x80 // extension data appended
 )
 
 const authDataMinLen = 37 // rpIdHash(32) + flags(1) + signCount(4)
 
-// Credential is one enrolled authenticator, provisioned on the high side.
-//
-// Signer names the person, not the token. Two-person control is over people:
-// if one person enrols two authenticators, signatures from both are still one
-// person, and counting credentials rather than signers would let them satisfy
-// the threshold alone.
+// Credential is one enrolled authenticator. Signer names the person, not the
+// token: counting credentials would let one person holding two of them meet a
+// two-signer threshold alone.
 type Credential struct {
 	ID        string    `json:"id"`
 	Signer    string    `json:"signer"`
@@ -95,17 +77,12 @@ type Credential struct {
 type Policy struct {
 	RPID string `json:"rpid"`
 
-	// RequireUV demands PIN or biometric, not merely a touch. A touch proves
-	// the token was present; it does not prove who was holding it. For
-	// two-person control the distinction is the entire point.
+	// RequireUV demands PIN or biometric. A touch proves the token was
+	// present, not who was holding it.
 	RequireUV bool `json:"require_uv"`
 
-	// RequireCounter refuses an authenticator that does not maintain a
-	// signature counter. Such a token cannot be checked for cloning, so the
-	// choice is between refusing it and accepting that the property is
-	// unavailable. Which one is right depends on the deployment, so it is a
-	// policy rather than a default, but it is never silently unavailable:
-	// Verify reports it either way.
+	// RequireCounter refuses an authenticator with no signature counter, which
+	// cannot be checked for cloning. Verify reports which way it went.
 	RequireCounter bool `json:"require_counter"`
 }
 
@@ -127,8 +104,7 @@ func (a AuthData) UserPresent() bool  { return a.Flags&flagUP != 0 }
 func (a AuthData) UserVerified() bool { return a.Flags&flagUV != 0 }
 
 // ClientDataHash is the challenge the authenticator signs over. Binding it to
-// the canonical manifest is what stops an assertion made over one manifest
-// being replayed onto another.
+// the canonical manifest stops an assertion being replayed onto another one.
 func ClientDataHash(canonical []byte) [32]byte {
 	h := sha256.New()
 	h.Write([]byte(clientDataDomain))
@@ -138,12 +114,9 @@ func ClientDataHash(canonical []byte) [32]byte {
 	return out
 }
 
-// ParseAuthData reads the fixed header of authenticator data.
-//
-// The trailing attested-credential-data and extension blocks are not parsed,
-// because an assertion has no business carrying them, but their flags are
-// still checked against the length so a truncated or padded blob cannot be
-// passed off as well-formed.
+// ParseAuthData reads the fixed header of authenticator data. The trailing
+// blocks are not parsed, but their flags are checked against the length so a
+// padded blob cannot pass as well-formed.
 func ParseAuthData(b []byte) (AuthData, error) {
 	if len(b) < authDataMinLen {
 		return AuthData{}, fmt.Errorf("%w: %d bytes, need at least %d", ErrMalformedAuthData, len(b), authDataMinLen)
@@ -160,11 +133,9 @@ func ParseAuthData(b []byte) (AuthData, error) {
 	return ad, nil
 }
 
-// Result reports what an accepted assertion did and did not establish.
-//
-// CounterChecked is not a detail. An authenticator that does not count cannot
-// be checked for cloning, and an accepted assertion that quietly skipped that
-// check looks identical to one that passed it. The dossier says which.
+// Result reports what an accepted assertion did and did not establish. An
+// assertion that skipped the cloning check looks identical to one that passed
+// it unless CounterChecked says which.
 type Result struct {
 	Signer         string `json:"signer"`
 	SignCount      uint32 `json:"sign_count"`
@@ -173,13 +144,8 @@ type Result struct {
 }
 
 // Verify checks one assertion against one credential and the boundary policy.
-//
-// lastCount is the highest counter previously seen for this credential; zero
-// for a credential that has not signed before.
-//
-// The order is deliberate and runs cheapest-and-most-specific first, so the
-// reason reported is the most informative one available rather than whichever
-// check happened to run first.
+// lastCount is the highest counter seen for this credential, zero if it has not
+// signed before. Checks run most-specific first, for the informative reason.
 func Verify(a Assertion, c Credential, p Policy, lastCount uint32, canonical []byte) (Result, error) {
 	var res Result
 
@@ -204,9 +170,8 @@ func Verify(a Assertion, c Credential, p Policy, lastCount uint32, canonical []b
 		return res, fmt.Errorf("%w: assertion was made for a different relying party", ErrRPMismatch)
 	}
 
-	// Presence and verification are checked before the signature so that a
-	// well-formed assertion made without a human is reported as such rather
-	// than passing into the cryptography and being judged only on maths.
+	// Presence and verification before the signature, so an assertion made
+	// with no human present is reported as such rather than judged on maths.
 	if !ad.UserPresent() {
 		return res, fmt.Errorf("%w: the user-presence flag is clear, so nothing was touched", ErrNoUserPresence)
 	}
@@ -222,18 +187,15 @@ func Verify(a Assertion, c Credential, p Policy, lastCount uint32, canonical []b
 		return res, err
 	}
 
-	// Counter last: a regression means a cloned authenticator, and that is
-	// only meaningful once the assertion is known to be genuine. Reporting it
-	// on a forged assertion would send an operator hunting for a clone that
-	// does not exist.
+	// Counter last: a regression means a clone only once the signature is
+	// known genuine, otherwise the operator hunts a clone that does not exist.
 	res.SignCount = ad.SignCount
 	switch {
 	case ad.SignCount > lastCount:
 		res.CounterChecked = true
 	case ad.SignCount == 0 && lastCount == 0:
-		// The authenticator does not maintain a counter. Cloning cannot be
-		// detected for it, which is a fact about the token, not a failure of
-		// this assertion.
+		// No counter on this authenticator. Cloning cannot be detected for it,
+		// which is a fact about the token, not a failure of this assertion.
 		if p.RequireCounter {
 			return res, fmt.Errorf("%w: this authenticator does not maintain a signature counter",
 				ErrCounterUnsupported)

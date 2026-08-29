@@ -9,10 +9,8 @@ import (
 	"sort"
 )
 
-// Store is the set of credentials provisioned on the high side, plus the
-// highest signature counter seen for each. The counters are state, in the same
-// sense as the last-accepted bundle version: they only mean anything if they
-// persist across runs.
+// Store is the credentials provisioned on the high side plus the highest
+// signature counter seen for each. Counters mean nothing unless they persist.
 type Store struct {
 	Policy      Policy                `json:"policy"`
 	Credentials []Credential          `json:"credentials"`
@@ -20,11 +18,8 @@ type Store struct {
 	byID        map[string]Credential `json:"-"`
 }
 
-// LoadStore reads the provisioned credentials.
-//
-// A credential whose signer is blank is refused rather than defaulted. The
-// signer field is what two-person control counts, so an unnamed credential
-// would silently join whichever group the empty string happens to land in.
+// LoadStore reads the provisioned credentials. A blank signer is refused, not
+// defaulted: signer is what two-person control counts.
 func LoadStore(path string) (*Store, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -62,12 +57,8 @@ func (s *Store) Save(path string) error {
 }
 
 // VerifyAll checks every assertion and returns the distinct signers.
-//
-// Distinctness is over the person named by the credential, not over the
-// credential. One person holding two enrolled authenticators is still one
-// person, and counting credentials would let them satisfy a two-signer
-// threshold without anyone else being involved. That is the same failure as
-// the same key signing twice, so it reports the same reason.
+// Distinctness is over the person: two authenticators held by one person must
+// not satisfy a two-signer threshold.
 func (s *Store) VerifyAll(assertions []Assertion, canonical []byte, minDistinct int) ([]Result, error) {
 	seen := map[string]bool{}
 	var results []Result
@@ -96,9 +87,8 @@ func (s *Store) VerifyAll(assertions []Assertion, canonical []byte, minDistinct 
 	return results, nil
 }
 
-// Commit advances the stored counters. It runs only after a decision to
-// accept, so a refused bundle cannot burn a counter and lock out the real
-// signer.
+// Commit advances the stored counters. Runs only after an accept, so a refused
+// bundle cannot burn a counter and lock out the real signer.
 func (s *Store) Commit(results []Result, assertions []Assertion) {
 	for i, r := range results {
 		if r.CounterChecked && i < len(assertions) {

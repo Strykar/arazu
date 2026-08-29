@@ -2,18 +2,12 @@
 
 // Package model is the one reasoning interface the gate talks to.
 //
-// Everything below this interface is byte-identical whether the backend is a
-// frontier API in connected mode or local weights in the air gap. That is the
-// air-gap thesis stated as a type: a weaker in-boundary model means fewer
-// candidates and more regeneration, but the acceptance bar does not live in
-// the model, so it does not move when the model gets weaker.
-//
-// Two things here are load-bearing rather than bookkeeping. Usage is recorded
-// per call because cost-per-trusted-patch is a headline number and cannot be
-// reconstructed afterwards. And every request is recorded by the stub, because
-// the red-team stage has to prove the refuter never saw the generator's
-// reasoning, and the only way to assert that is to look at what was actually
-// sent.
+// The interface is identical whether the backend is a frontier API or local
+// weights in the air gap: the acceptance bar does not live in the model, so a
+// weaker model costs candidates, not standards. Usage is per call because
+// cost-per-trusted-patch cannot be reconstructed afterwards; the stub records
+// every request because what was sent is the only evidence the refuter never
+// saw the generator's reasoning.
 package model
 
 import (
@@ -22,19 +16,14 @@ import (
 	"fmt"
 )
 
-// ErrRefused is what a backend returns when it declines to answer. It is not
-// an error in the plumbing, and it must not be retried into a different
-// answer, so it is a sentinel rather than a generic failure.
+// ErrRefused is a backend declining to answer. A sentinel rather than a
+// generic failure, because it must not be retried into a different answer.
 var ErrRefused = errors.New("model-refused")
 
-// Request is one turn. There is no conversation history on purpose: every
-// stage of the gate constructs its own prompt from scratch, so that what a
-// stage saw is exactly what is in the request and nothing leaks in from a
-// previous call.
+// Request is one turn. No conversation history: every stage builds its own
+// prompt, so what a stage saw is exactly what is in the request.
 type Request struct {
-	// Purpose names the stage making the call. It is recorded with the usage
-	// so per-stage cost is attributable, and it is what the isolation test
-	// filters on.
+	// Purpose names the calling stage. Cost and the isolation test key on it.
 	Purpose string
 
 	System string
@@ -42,16 +31,13 @@ type Request struct {
 
 	MaxTokens int
 
-	// Seed and Temperature exist so a run can be repeated. The
-	// non-determinism control generates K candidates and accepts only those
-	// that pass R repeats, which is only meaningful if the knobs that make a
-	// run repeatable are under our control rather than the backend's default.
+	// Seed and Temperature make a run repeatable, which the K-candidates,
+	// R-repeats non-determinism control depends on.
 	Seed        int64
 	Temperature float64
 }
 
-// Usage is what a call cost. Reported per call rather than summed, so a
-// report can separate what each stage spent.
+// Usage is what one call cost. Per call, not summed, so spend splits by stage.
 type Usage struct {
 	Purpose      string `json:"purpose"`
 	Backend      string `json:"backend"`
@@ -64,20 +50,17 @@ type Response struct {
 	Usage Usage  `json:"usage"`
 }
 
-// Model is the whole surface. Keeping it to one method is what makes the
-// backends interchangeable and the stub honest: there is nothing a real
-// backend can do here that the stub cannot.
+// Model is the whole surface. One method keeps the backends interchangeable
+// and leaves the stub nothing a real backend can do that it cannot.
 type Model interface {
 	Name() string
 	Complete(ctx context.Context, r Request) (Response, error)
 }
 
-// Validate refuses a request the gate should never have built.
-//
-// A zero temperature is the intended default rather than an unset field, so
-// it is not an error, but an unnamed purpose is: an unattributed call breaks
-// both the cost report and the isolation assertion, and neither failure would
-// be visible at the time it happened.
+// Validate refuses a request the gate should never have built. An unnamed
+// purpose is fatal: an unattributed call breaks the cost report and the
+// isolation assertion, and neither failure shows at the time. Zero temperature
+// is the intended default, not an unset field.
 func Validate(r Request) error {
 	if r.Purpose == "" {
 		return fmt.Errorf("request has no purpose, so its cost and isolation cannot be attributed")

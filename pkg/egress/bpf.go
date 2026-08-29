@@ -28,11 +28,8 @@ type Counters struct {
 	SendmsgDenied uint64 `json:"sendmsg_denied"`
 	ConnectSeen   uint64 `json:"connect_seen"`
 	SendmsgSeen   uint64 `json:"sendmsg_seen"`
-	// LoopbackAllowed is the one thing this program permits from inside the
-	// boundary: an AF_INET destination on 127.0.0.0/8, which is internal to the
-	// namespace. Counted separately from a plain allow so the carve-out is
-	// visible as its own number rather than as the absence of a denial — a
-	// permitted egress and a hook that never ran are otherwise the same zero.
+	// LoopbackAllowed counts the sole permitted case, AF_INET on 127.0.0.0/8.
+	// A permitted egress and a hook that never ran are otherwise the same zero.
 	LoopbackAllowed uint64 `json:"loopback_allowed"`
 }
 
@@ -42,13 +39,10 @@ type Deny struct {
 	links []link.Link
 }
 
-// RequireBPFLSM reports whether the bpf LSM is in the active list.
-//
-// Checking this before attaching matters because attach succeeds either way.
-// A kernel with the bpf LSM built in but absent from the runtime lsm= list
-// loads the program, passes the verifier, returns a live link, and never
-// fires the hook. That failure is indistinguishable from a working gate
-// that permits everything.
+// RequireBPFLSM reports whether the bpf LSM is in the active list. Must run
+// before attach, which succeeds either way: without bpf in the runtime lsm=
+// list the program loads and links but the hook never fires, which is
+// indistinguishable from a gate that permits everything.
 func RequireBPFLSM() error {
 	b, err := os.ReadFile("/sys/kernel/security/lsm")
 	if err != nil {
@@ -63,12 +57,9 @@ func RequireBPFLSM() error {
 		strings.TrimSpace(string(b)))
 }
 
-// AttachDeny loads the program, scopes it to one namespace inode, and
-// attaches both hooks.
-//
-// Either both hooks attach or none do. A half-attached denial would cover
-// connect but not sendmsg, which is exactly the gap the program exists to
-// close.
+// AttachDeny loads the program, scopes it to one namespace inode, and attaches
+// both hooks. Either both attach or none do: connect covered without sendmsg
+// is the gap this closes.
 func AttachDeny(objPath string, inode uint32) (*Deny, error) {
 	if err := RequireBPFLSM(); err != nil {
 		return nil, err
