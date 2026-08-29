@@ -214,8 +214,8 @@ func resolveClassTarget(c corpus.Case, corpusRoot, repoRoot, shim, workDir strin
 		Observer: obs,
 		RepoRoot: repoRoot, Source: src, Ref: c.Source.SrcRef,
 		OSSFuzz: tooling, Project: c.Source.FuzzToolingProject,
-		Harness: c.Harness, Sanitizer: c.PoV.Sanitizer,
-		Shim: shim, WorkDir: workDir, Members: members,
+		Sanitizer: c.PoV.Sanitizer,
+		Shim:      shim, WorkDir: workDir, Members: members,
 	}, nil
 }
 
