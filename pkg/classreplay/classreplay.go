@@ -4,30 +4,24 @@
 // class, not just the input that crashed.
 //
 // M1 credits a patch when the PoV stops firing, which is what an incomplete fix
-// does well. libpng run 2 stopped the crash, passed 29 PoV variants and the full
-// suite, and removed iCCP support for every PNG carrying an ICC profile. No
-// sanitizer and no single input sees that.
+// does well: libpng run 2 stopped the crash, passed 29 PoV variants and the full
+// suite, and removed iCCP support for every PNG carrying an ICC profile.
 //
-// THE ORACLE IS THE REFERENCE PATCH, not the declared discriminator.
-// FalsifyingClass.Discriminator is prose for a reviewer and cannot be executed.
-// reference_patch is a fix known to be correct, so the comparison is
-// differential: any class member the candidate and the reference handle
-// differently is a member the candidate gets wrong. This shows the candidate
-// differs from the reference, not that the reference is right.
+// THE ORACLE IS THE REFERENCE PATCH, not the declared discriminator, which is
+// prose for a reviewer and cannot be executed. Any class member the candidate
+// and the reference handle differently is one the candidate gets wrong. That
+// shows the candidate differs from the reference, not that the reference is right.
 //
-// TWO ORACLES, because the strong one is missing where it matters most. The
-// organisers' target has no reference patch -- producing the fix IS the exercise
-// -- and M2 catches the class M1 and M3 both miss. The fallback is the pre-patch
-// build, which October always provides:
+// TWO ORACLES, because a real target has no reference patch -- producing the fix
+// IS the exercise:
 //
 //	reference available -> compare against the known-good fix; divergence REJECTs.
-//	reference absent    -> compare against the UNPATCHED build and partition by
-//	  pre-patch behaviour. Crashed before and differs after is the fix working.
-//	  Did NOT crash before and differs after is unadjudicated-behaviour-change,
-//	  an ERROR: a differential is an oracle for CHANGE, not for correctness, so
-//	  the gate surfaces it and does not decide it.
+//	reference absent    -> compare against the UNPATCHED build. A differential is
+//	  an oracle for CHANGE, not for correctness, so neither partition can accept:
+//	  unintended divergence is unadjudicated-behaviour-change and agreement is
+//	  class-no-reference, both undecided for a human to settle.
 //
-// So the stage degrades to undecided rather than to unavailable.
+// So without a reference the stage degrades to undecided, never to accepted.
 package classreplay
 
 import (
@@ -174,11 +168,16 @@ func (s Stage) Run(ctx context.Context, in gate.Input) (gate.StageResult, error)
 		evidence = append(evidence, fmt.Sprintf(
 			"of those, %d are on members the unpatched build did not crash on", len(unintended)))
 		if len(unintended) == 0 {
+			// A complete fix and an incomplete one look identical here, since an
+			// incomplete fix leaves the rest of the class alone by construction.
 			return gate.StageResult{
 				Stage:   name,
-				Outcome: gate.OutcomePassed,
+				Outcome: gate.OutcomeUndecided,
+				Reason:  corpus.ReasonClassNoReference,
 				Evidence: append(evidence,
-					"every divergence is on a member that crashed before the patch, which is the fix working"),
+					"every divergence is on a member that crashed before the patch",
+					"against the unpatched build that is indistinguishable from an incomplete "+
+						"fix, so the class does not adjudicate this candidate without a reference"),
 			}, nil
 		}
 		for i, d := range unintended {

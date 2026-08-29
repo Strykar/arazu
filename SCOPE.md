@@ -231,7 +231,15 @@ has none — producing the fix is the exercise. The pre-patch build was tried as
 substitute and is *inverted* on this bug class: an incomplete fix is by
 construction one that leaves baseline behaviour alone, so comparing against
 baseline cannot see it. On libpng the wrong patch agrees with the unpatched
-build and passes, while the correct fix differs and is flagged.
+build while the correct fix differs from it.
+
+That inversion used to reach the verdict: agreement with the baseline returned
+ACCEPT, so the reference-free path accepted the corpus's central counterexample
+and flagged the correct fix instead. Since 2026-08-29 neither partition can
+accept. Agreement is `class-no-reference` and divergence on a member that never
+crashed is `unadjudicated-behaviour-change`, both undecided, because a
+differential against the baseline is an oracle for change and not for
+correctness. Without a reference M2 surfaces, it does not adjudicate.
 
 The oracle that survives having no reference is **candidate disagreement** —
 sample K patches, and treat the ones that disagree across the class as the

@@ -180,8 +180,12 @@ func TestPrePatchOracleIgnoresTheFixItself(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if res.Outcome != gate.OutcomePassed {
-		t.Errorf("outcome = %q (%s), want passed", res.Outcome, res.Reason)
+	// The fix's own divergence on the crashing member is not counted against it:
+	// that is what class-no-reference means here, as opposed to the
+	// unadjudicated-behaviour-change the stage reports when a member that never
+	// crashed changes behaviour.
+	if res.Reason != corpus.ReasonClassNoReference {
+		t.Errorf("reason = %q, want %q", res.Reason, corpus.ReasonClassNoReference)
 	}
 }
 
@@ -279,5 +283,34 @@ func TestAClassWithNoObserverIsRefusedNotFallenBackOn(t *testing.T) {
 	}
 	for _, c := range f.calls {
 		t.Errorf("target was called (%s) before the stage established it could observe anything", c)
+	}
+}
+
+// The libpng inversion, in miniature. With no reference fix the oracle is the
+// unpatched build, and an incomplete fix agrees with it everywhere except the
+// input that crashed -- which is exactly the shape of a complete fix. Passing
+// here would accept the candidate this corpus exists to refuse.
+func TestNoReferenceCannotAcceptAgreementWithTheUnpatchedBuild(t *testing.T) {
+	f := &fake{members: []string{"a.png", "b.png"}, byPatch: map[string]map[string]string{
+		"":           {"a.png": "AddressSanitizer: heap-buffer-overflow", "b.png": "keyword NOT parsed"},
+		"cand.patch": {"a.png": "clean", "b.png": "keyword NOT parsed"},
+	}}
+	s := stage(f)
+	s.ReferencePatch = ""
+	in := input(true)
+	in.Case.PoV = corpus.PoV{ExpectedSanitizer: "AddressSanitizer: heap-buffer-overflow"}
+
+	res, err := s.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if res.Outcome == gate.OutcomePassed {
+		t.Fatal("accepted a candidate on agreement with the unpatched build, which an incomplete fix produces")
+	}
+	if res.Outcome != gate.OutcomeUndecided {
+		t.Errorf("outcome = %q, want %q", res.Outcome, gate.OutcomeUndecided)
+	}
+	if res.Reason != corpus.ReasonClassNoReference {
+		t.Errorf("reason = %q, want %q", res.Reason, corpus.ReasonClassNoReference)
 	}
 }

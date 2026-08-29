@@ -537,5 +537,16 @@
     "packages": [
       "./pkg/revert/"
     ]
+  },
+  {
+    "id": "classreplay-no-reference-accepts",
+    "check": "with no reference fix, agreement with the unpatched build is not an acceptance",
+    "file": "pkg/classreplay/classreplay.go",
+    "before": "\t\t\t\tOutcome: gate.OutcomeUndecided,\n\t\t\t\tReason:  corpus.ReasonClassNoReference,",
+    "after": "\t\t\t\tOutcome: gate.OutcomePassed,",
+    "expect": "TestNoReferenceCannotAcceptAgreementWithTheUnpatchedBuild",
+    "packages": [
+      "./pkg/classreplay/"
+    ]
   }
 ]

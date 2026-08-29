@@ -138,6 +138,10 @@ const (
 	// reason says unadjudicated, "surfaces unintended change for review" cannot
 	// quietly become "detects wrong patches".
 	ReasonUnadjudicatedBehaviourChange = "unadjudicated-behaviour-change"
+	// M2 with no reference fix: the candidate matches the unpatched build
+	// everywhere it did not already crash, which a complete and an incomplete fix
+	// both do. A change oracle cannot accept.
+	ReasonClassNoReference = "class-no-reference"
 	// M4, non-determinism control: the candidate passes on some repeats and
 	// fails on others.
 	ReasonNondeterministic = "nondeterministic"
