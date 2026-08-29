@@ -8,22 +8,15 @@
 //  1. Did the PoV fire on the PRE-patch build?   — about the case
 //  2. Does the patch stop it firing?             — about the patch
 //
-// A no to the first is not a rejection. It means the case demonstrates no
-// vulnerability, so no patch can be credited with fixing one and the fault is
-// in the reproduction. That is ERROR / pov-not-reproduced, and it routes an
-// operator to the harness rather than to a patch that is probably fine.
+// A no to the first is ERROR / pov-not-reproduced: the case demonstrates no
+// vulnerability, so the fault is in the reproduction and an operator belongs at
+// the harness. A no to the second is REJECT / revert-attribute-fail, the "green
+// suite proves nothing" case.
 //
-// A no to the second is a rejection: the PoV fires with the patch applied, so
-// removing the patch changes nothing and nothing attributes the fix to it. That
-// is REJECT / revert-attribute-fail, and it is the "green suite proves nothing"
-// case.
-//
-// On reverting. Every candidate in this corpus is a single patch applied to the
-// tree at its pinned commit, so "revert the patch alone" and "the pinned tree"
-// are the same state, and the pre-patch run serves as both. That equivalence is
-// an assumption about the corpus, not a general truth: a candidate stacked on
-// other changes would need the revert performed explicitly, because reverting
-// it alone would no longer return the tree to the pin.
+// ASSUMPTION about this corpus, not a general truth: every candidate is a single
+// patch on the tree at its pin, so "revert the patch alone" and "the pinned
+// tree" are the same state and the pre-patch run serves as both. A candidate
+// stacked on other changes would need the revert performed explicitly.
 package revert
 
 import (
@@ -36,12 +29,10 @@ import (
 
 // PoVRun is one execution of the proof of vulnerability.
 //
-// HarnessRan is separate from SanitizerFired because the two failures look
-// identical in a log that only records the absence of a crash: a harness that
-// executed and stayed silent is a mis-wired reproduction, a harness that never
-// executed is a broken one. The first is a finding about the case; the second
-// means this stage could not run its check at all. Collapsing them would let a
-// broken harness masquerade as a demonstrated absence of vulnerability.
+// HarnessRan is separate from SanitizerFired because both look identical in a
+// log that records only the absence of a crash. A harness that ran and stayed
+// silent is a finding about the case; one that never ran means the check could
+// not execute. Collapsed, a broken harness passes as a demonstrated absence.
 type PoVRun struct {
 	HarnessRan     bool
 	SanitizerFired bool
@@ -52,19 +43,16 @@ type PoVRun struct {
 	Evidence []string
 }
 
-// Target is the tree under test. It exists so the stage's decision logic can be
-// exercised without a container: the ordering of the two questions is the part
-// most worth testing, and it should not require a build to check.
+// Target is the tree under test, an interface so the ordering of the two
+// questions is testable without a build.
 type Target interface {
-	// ResetToPin returns the tree to the case's pinned commit, discarding any
-	// patch a previous run left applied. A tree left patched is the single
-	// easiest way to produce a clean PoV run that looks like a fix.
+	// ResetToPin returns the tree to the case's pin, discarding any patch a
+	// previous run left applied: a tree left patched is the easiest way to get a
+	// clean PoV run that looks like a fix.
 	//
-	// It must VERIFY the tree is clean afterwards and return an error if it is
-	// not, rather than assuming the reset took. Everything downstream depends on
-	// it: a dirty tree makes a sound candidate fail to apply, and that would be
-	// reported as patch-does-not-apply, sending an operator to debug a patch
-	// when the fault is here.
+	// It must VERIFY the tree is clean afterwards rather than assume the reset
+	// took. A dirty tree makes a sound candidate fail to apply, which reports as
+	// patch-does-not-apply and sends an operator to debug the wrong thing.
 	ResetToPin(ctx context.Context) error
 	Apply(ctx context.Context, patchPath string) error
 	Build(ctx context.Context) error
@@ -116,13 +104,24 @@ func (s Stage) Run(ctx context.Context, in gate.Input) (gate.StageResult, error)
 		}, nil
 	}
 
+	if before.Site == corpus.SiteDiffer {
+		// The sanitizer fired somewhere else, so what was watched is a different
+		// defect and the candidate must not be credited with stopping it.
+		return gate.StageResult{
+			Stage:   name,
+			Outcome: gate.OutcomeUndecided,
+			Reason:  corpus.ReasonPoVNotReproduced,
+			Evidence: append(evidence,
+				"the unpatched tree crashes somewhere other than the declared crash site",
+				"the reproduction demonstrates a different defect, so no patch can be "+
+					"attributed to fixing the declared one"),
+		}, nil
+	}
+
 	// Question 2, about the patch: does it stop what we just watched happen?
 	//
-	// A patch that will not apply is a fact about the candidate, established by
-	// a check that ran correctly, so it is a REJECT and not a plumbing error.
-	// This is only sound because ResetToPin verified the tree first: without
-	// that, a dirty tree would make a sound candidate fail here and route the
-	// operator to the patch instead of to the harness.
+	// A patch that will not apply is a REJECT, not a plumbing error, and that is
+	// only sound because ResetToPin verified the tree first.
 	if err := s.Target.Apply(ctx, s.PatchPath); err != nil {
 		return gate.StageResult{
 			Stage:   name,
@@ -149,10 +148,8 @@ func (s Stage) Run(ctx context.Context, in gate.Input) (gate.StageResult, error)
 	evidence = append(evidence, after.Evidence...)
 
 	if after.SanitizerFired {
-		// A sanitizer firing after the patch is not automatically the same
-		// vulnerability. Comparing only the sanitizer STRING cannot tell "your
-		// patch does not fix it" from "your patch fixes it and introduces a
-		// different bug", and those route an operator to different places.
+		// The sanitizer string alone cannot tell "does not fix it" from "fixes it
+		// and introduces a different bug", and those route to different places.
 		switch after.Site {
 		case corpus.SiteDiffer:
 			return gate.StageResult{

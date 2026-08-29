@@ -121,6 +121,30 @@ func TestTheThreeAcceptanceCases(t *testing.T) {
 	}
 }
 
+// The pre-patch crash site is measured and must be acted on. A sanitizer firing
+// somewhere the case did not declare means the reproduction demonstrates some
+// other bug, so crediting the patch with stopping it attributes the fix to a
+// vulnerability this case never showed.
+func TestPrePatchCrashAtAnotherSiteIsNotTheDeclaredVulnerability(t *testing.T) {
+	f := &fakeTarget{before: firedAt(corpus.SiteDiffer), after: ran(false)}
+	s := Stage{Target: f, BlobPath: "blob", PatchPath: "patch"}
+	res, err := s.Run(context.Background(), testInput())
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if res.Outcome != gate.OutcomeUndecided {
+		t.Errorf("outcome = %q, want %q", res.Outcome, gate.OutcomeUndecided)
+	}
+	if res.Reason != corpus.ReasonPoVNotReproduced {
+		t.Errorf("reason = %q, want %q", res.Reason, corpus.ReasonPoVNotReproduced)
+	}
+	for _, c := range f.calls {
+		if c == "apply" {
+			t.Fatal("applied the candidate against a reproduction of a different bug")
+		}
+	}
+}
+
 // The undecided case must not touch the patch at all. Building and running a
 // patched tree for a case that demonstrates nothing produces a green result
 // that means nothing, which is the shape this gate exists to refuse.

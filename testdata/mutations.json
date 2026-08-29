@@ -526,5 +526,16 @@
     "packages": [
       "./pkg/revert/"
     ]
+  },
+  {
+    "id": "revert-prepatch-site-ignored",
+    "check": "a pre-patch crash at an undeclared site is not the declared vulnerability",
+    "file": "pkg/revert/revert.go",
+    "before": "\tif before.Site == corpus.SiteDiffer {",
+    "after": "\tif false {",
+    "expect": "TestPrePatchCrashAtAnotherSiteIsNotTheDeclaredVulnerability",
+    "packages": [
+      "./pkg/revert/"
+    ]
   }
 ]
