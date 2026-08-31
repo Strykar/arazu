@@ -28,6 +28,20 @@ are working notes and are deliberately not in the repository. What follows is
 the part worth keeping: the findings that are live on the path `cmd/gate` and
 `cmd/drive` run today.
 
+Five of the eight were established by running something rather than by reading,
+and one carried as a finding turned out to be wrong and is recorded as withdrawn.
+Two are fixed, in the commits above this one. The rest are open, and P1 is the
+one that matters:
+
+    P1  reused dossier attributes another task's evidence   open, has a recipe
+    P2  m2 panics on a case with no falsifying class        open, unreachable today
+    P3  failed build reported as a success                  FIXED
+    P4  sweep dossiers carry no artifacts                   open
+    P5  M2's oracle build is not what observes              open
+    P6  candidate identity does not name the patch          open
+    P7  M1 and M2 pin to different trees                    open
+    P8  nothing binds the dossier to its run                open
+
 ### P1. A reused dossier directory attributes one task's evidence to another. CONFIRMED BY EXECUTION
 
 Ten seconds to reproduce, with no TPM and no container. Drive two of the real
@@ -118,6 +132,87 @@ recompiles. Hazard, not a live defect.
 Neither fixed. The first is a design question about what M2's evidence should
 record; the second is one flag whose asymmetry with its sibling may be deliberate.
 
+
+### P6. Candidate identity is derived from the task, not from what was graded
+
+`crsout.write` emits `id: crs-<task>` and `candidate: crs-<task>-candidate`, and
+writes the patch to the fixed path `<out>/<task>/candidate.patch`. The `patch_id`
+that `pair()` resolved is never written into the case. It survives only in
+`cmd/drive`'s stdout evidence line, which is neither in the dossier nor sealed.
+
+Two ways that loses which patch was graded. Capturing one task twice overwrites
+the first patch in place. And where a run carries several bundles that each name
+a patch and a pov, `pair()` returns the first one, iterating a list
+`artifacts()` sorted by filename; the evidence records "paired by the CRS's own
+bundle" without saying which bundle won.
+
+The dossier's artifact hash could tell two of a task's patches apart. Nothing
+consumes it, which is P8.
+
+### P7. M1 and M2 pin to different things and nothing reconciles them
+
+`Challenge.ResetToPin` runs `git reset --hard` on `source.src_commit`.
+`OSSFuzzTarget.reset` runs `git checkout --detach origin/<source.src_ref>`.
+`Case.Validate` requires `src_commit` and never checks that the two name the
+same tree; `src_ref` is not required at all.
+
+So M1, M2 and M3 can grade one candidate against two different trees, and all
+three results land in the same `Decision.Stages` vocabulary with nothing
+recording which tree each stage saw. Not observed happening, because the one
+case with a class has a `src_ref` whose tip is its `src_commit`. That is the
+case file being right, not the code checking.
+
+### P8. Nothing binds the dossier to the run that produced it
+
+`Decision.Artifacts` is written by `dossier.Emit` and read only by
+`dossier.Verify`, which rehashes each artifact against the sum recorded in the
+same document. That establishes the dossier is internally consistent. It cannot
+establish that the file it carries is the file a stage graded.
+
+The two resolutions are independent. `EffectStage` resolves the patch path and
+opens it; `cmd/gate` resolves the same expression again to build `sources`; the
+sweep stages carry their own `PatchPath` from the caller. No digest crosses
+between the read that decided and the read that was hashed, and
+`Decision.Validate` never mentions `Artifacts` at all.
+
+`dossier.Verify` also has exactly one caller, `cmd/dossier`. Nothing in
+`cmd/drive`, `cmd/gate`, the Makefile or `scripts/` invokes it, so the check that
+would catch P4 never runs where dossiers are made. Wiring it in is necessary and
+not sufficient: P1 is a dossier that verifies clean and describes the wrong task.
+
+### Withdrawn: run_pov's discarded run.sh error
+
+Listed here because it was carried as a finding and is not one. `RunPoV` ignores
+run.sh's exit status when the run produced its own output directory, which looked
+like the defect P3 turned out to be, one command along.
+
+It is correct as written. Across 109 real run_pov directories on the staged nginx
+checkout, 106 exit 0 whether or not the sanitizer fired, which is the premise the
+package is built on. Of the three that did not: two have no libfuzzer `Running:`
+line and are already refused by `HarnessRan`, and the third is a firing PoV whose
+harness aborted under ASan, where treating a nonzero exit as failure would turn a
+correct measurement into an error.
+
+The asymmetry with P3 is real and deliberate. For `build`, nonzero means the
+build failed. For `run_pov`, nonzero mostly means the vulnerability fired.
+
+### Smaller ones, recorded so they are not re-derived
+
+Each is real, none is worth its own entry.
+
+- `localTag` returns the first `docker images` line matching the base repository,
+  so with two tags of one base the choice follows the runtime's listing order.
+  The resolved image reaches no `StageResult` and no `Decision` field, so a
+  dossier cannot say which image built the tree.
+- `outputSet` discards `filepath.Glob`'s error. Glob only errors on a malformed
+  pattern, so this is unreachable with a literal pattern, but on an error the
+  before-set is empty and every pre-existing directory counts as new, which is
+  the defect `revert-stale-output-read` exists to catch.
+- Nothing serialises two gate runs against one challenge checkout. `newestOutput`
+  resolves by modification time over a shared `out/output`.
+- `gate.Verify` only defaults `StageResult.Stage` when it is empty, so a stage
+  that names itself wrong is recorded under that name and `StageFor` and
+  `eval.Score` attribute the outcome to the wrong stage.
 
 ## Why the trees differ, and why the findings still mostly apply
 
@@ -280,12 +375,15 @@ Line numbers are this repo's, from the transfer check. Nothing here is verified.
 about whether the gate's own tests would catch a broken gate, and several
 findings above are exactly the mutations that catalogue would have surfaced.
 
-Partly closed since. Measured at `c539afd` on 2026-08-31: the catalogue holds 67
-mutations, of which `pkg/corpus` has 21, `pkg/revert` 2 and `pkg/classreplay` 1.
-`pkg/gate` still has none, so the sentence above is now wrong about three of the
-four packages and still right about the one that decides. Thirteen files on the
-acceptance path carry no entry, including all of `pkg/gate`, `pkg/sanitizer`,
-`pkg/crsout`, `pkg/dossier/verify.go`, `pkg/eval` and every `cmd` on the path.
+Partly closed since. Counted off the catalogue on 2026-09-01, which now holds
+78 mutations: `pkg/corpus` has 23, `pkg/revert` 3 and `pkg/classreplay` 2. So the sentence
+above is wrong about three of the four packages and still right about the one
+that decides: `pkg/gate` has none.
+
+11 files on the acceptance path carry no entry, `pkg/gate` entire among them,
+along with `pkg/sanitizer`, `pkg/crsout`, `pkg/dossier/verify.go`, `pkg/eval` and
+every `cmd` on the path. The corpus loader that feeds the bar is evidenced; the
+bar is not.
 
 ## How to run it properly
 

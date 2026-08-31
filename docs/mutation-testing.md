@@ -32,24 +32,25 @@ The rebuild matters. The `cmd` tests exec binaries out of `bin/`, so a mutant th
   tested, so it is evidence of nothing; it is deliberately not folded into `untestable`, which
   is a declared exemption carrying a reason, whereas this is the harness being broken.
 
-## Current state, 2026-08-31
+## Current state, 2026-09-01
 
-71 mutations: 68 caught, 3 subsumed, 0 uncaught, 0 did not build.
+78 mutations: 75 caught, 3 subsumed, 0 uncaught, 0 did not build.
+Read the totals off a run rather than incrementing them: this line said 40/37
+for a day after gate-reason-bad-signature was added, and 71 for a day after the
+contained-run batch landed beside the audit's four.
 
-The four added on 2026-08-31 came out of the evidence-provenance audit and cover
-the acceptance path rather than the envelope: `stagefor-class-reasons`,
+Those four came out of the evidence-provenance audit and cover the acceptance
+path rather than the envelope: `stagefor-class-reasons`,
 `build-exitcode-not-runsh-status`, `class-size-from-the-case` and
 `class-size-declared`.
 
-That batch also produced the clearest demonstration yet of what this harness is
-for. Adding a `size` check to `Case.Validate` masked the generator/discriminator
-check beside it: the test's fixtures withheld both fields at once, so the new
-check refused them first and breaking the old one stopped failing anything. The
-suite stayed green and `corpus-class-needs-both-fields` flipped to UNCAUGHT. A
-check does not have to be deleted to stop being evidenced; another check landing
-in front of it is enough, and nothing but a mutation run reports that.
-Read the totals off a run rather than incrementing them: this line said 40/37
-for a day after gate-reason-bad-signature was added.
+They also produced the clearest demonstration yet of what this harness is for.
+Adding a `size` check to `Case.Validate` masked the generator/discriminator check
+beside it: the test's fixtures withheld both fields at once, so the new check
+refused them first and breaking the old one stopped failing anything. The suite
+stayed green and `corpus-class-needs-both-fields` flipped to UNCAUGHT. A check
+does not have to be deleted to stop being evidenced; another check landing in
+front of it is enough, and nothing but a mutation run reports that.
 
 This figure was unreproducible between 2026-08-16 and 2026-08-18. Vendoring the
 dependencies broke every mutant, because `treeEntries` did not copy `vendor/` and the
