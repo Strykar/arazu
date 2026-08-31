@@ -16,6 +16,109 @@ a finding to fix.
 
 The one exception is marked CONFIRMED HERE.
 
+Everything below the next section is from that wrong-repo review. The section
+immediately following is not: it is from an audit of THIS tree.
+
+## Evidence-provenance audit of this tree, 2026-08-31
+
+A second review ran against this repository, scoped to one question: whether a
+verdict's evidence provably belongs to the execution and the candidate the
+verdict names. Design and the full inventory are in
+`docs/evidence-provenance-audit.md`; run logs and
+transcripts sit beside it. Findings live on the path `cmd/gate` and `cmd/drive`
+run today.
+
+### P1. A reused dossier directory attributes one task's evidence to another. CONFIRMED BY EXECUTION
+
+`scripts/repro-dossier-reuse.sh`, ten seconds, no TPM or container. Two real
+Buttercup runs with different patches into one `-dossier`: run 2 reports ACCEPT
+at exit 0 for task B while the dossier still names task A's candidate and A's
+patch hash, with an identical content root. With `-seal` set, that is what gets
+signed.
+
+`dossier.Emit` fails when `<dossier>/artifacts` exists; `emitDecision` prints the
+verdict BEFORE testing whether the write succeeded; `cmd/drive` reads that stdout
+and never consults the exit code (`cmd/drive/main.go:104`). The log records
+nothing for run 2, because `emitDecision` exits before `logDecision`.
+
+Two traps for whoever fixes it. `dossier verify` returns `dossier-verified`, so
+wiring it in does not catch this: the dossier is honest about the wrong task.
+And the trigger is just a reused path, which nothing clears or refuses.
+
+Not fixed: refuse a non-empty dossier, namespace it per task, honour the exit
+code, or bind `candidate_id` at the seal are all defensible, and choosing is a
+design decision.
+
+### P2. `gate -stage m2` panics on a case with no falsifying class. CONFIRMED BY EXECUTION
+
+`cmd/gate/target.go:201` dereferences `c.FalsifyingClass.Observer`; the guards
+above it check `fuzz_tooling_project` and `pov.sanitizer`, neither of which
+covers a nil class the schema makes optional.
+
+Not reachable from any shipped case and fails closed when reached: nginx cases
+have no `fuzz_tooling_project`, libpng has a class, captured cases are refused
+earlier by `reference_patch == ""`, and the panic's empty stdout reaches drive as
+`gate-said-nothing`. Hardening, not a live defect.
+
+`classreplay.Stage` already returns `class-not-defined` for this input. The
+caller panics before the stage it delegates to can produce it.
+
+### P3. A failed container build was reported to the gate as a successful one. FIXED 2026-08-31
+
+`Challenge.Build` decided success from `./run.sh build`'s exit status. That
+status is not the signal: run.sh records the container's real code in
+`out/output/<ts>--build/exitcode` and exits 0 regardless.
+
+A real `gate -stage m1` on `nginx-cpv2` against the case's own good candidate
+therefore ran both PoVs against a twenty-day-old `pov_harness` and returned
+REJECT `revert-attribute-fail`, six seconds end to end. Bounded direction: both
+sides measure the same binary, so this errs toward REJECT, never ACCEPT.
+
+Fixed by exception to this audit's no-fix rule, because the shape was not in
+question: `Build` now reads the recorded exitcode, which `RunPoV` ten lines below
+has always done. Re-running the identical command turned the false REJECT into
+`UNDECIDED ... the build failed with exit "1"`, naming the container's own
+diagnostic. Five tests, one of them the mirror that stops the guard being
+satisfied by refusing every build; catalogue entry
+`build-exitcode-not-runsh-status`.
+
+Of 132 historical build directories on the staged nginx checkout, ten recorded a
+non-zero or unreadable status. Those runs were graded against whatever was in
+`out/`.
+
+### P4. Sweep-stage dossiers carry no artifacts at all. CONFIRMED BY EXECUTION
+
+`cmd/gate/main.go:92` assigns `outs.sources` only in the `m0` branch, after the
+switch at line 60 has routed m1, m2 and m3 to `runSweep` and returned. Confirmed
+in the same real m1 run as P3: `"artifacts"` absent, `artifacts/` present and
+empty.
+
+So every dossier from a stage that builds a tree and runs a PoV verifies as
+`dossier-not-self-contained`, the outcome meant for dossiers written before
+`pkg/dossier` existed. The only path with artifacts is m0, which is also the only
+path the tests cover (`cmd/drive/main_test.go:42`).
+
+### P5. M2's oracle build contributes nothing, and its reset spares build objects. CONFIRMED BY EXECUTION
+
+`ReplayAgainst` spends a container build on `build_fuzzers --sanitizer
+<pov.sanitizer>`, then hands the observer only the source tree. Running
+`observe.sh` directly with no build at all produced a full observation set in 7.2
+seconds without touching `oss-fuzz/build/out/`. So what actually produces an M2
+observation is host `clang` with a hardcoded `-fsanitize=address,undefined` and
+the case's `reader.c`, none of which appear in the case, the decision or the
+dossier, while `resolveClassTarget` refuses an empty `pov.sanitizer` to protect a
+build nothing reads.
+
+Separately, `OSSFuzzTarget.reset` runs `git clean -qfd` where `ResetToPin` runs
+`-fdx`. `.o` is gitignored, so 15 build objects survive an M2 reset invisibly,
+and `observe.sh` archives `./*.o` by glob rather than the list it compiled. No
+contamination today, and only because those 15 are exactly the ones it
+recompiles. Hazard, not a live defect.
+
+Neither fixed. The first is a design question about what M2's evidence should
+record; the second is one flag whose asymmetry with its sibling may be deliberate.
+
+
 ## Why the trees differ, and why the findings still mostly apply
 
 `tcq2026-kavach` has no `pkg/sanitizer`, no `pkg/crsout`, no `cmd/drive`, and
@@ -176,6 +279,13 @@ Line numbers are this repo's, from the transfer check. Nothing here is verified.
 `pkg/revert` or `pkg/classreplay`. So `make mutation-test` passing says nothing
 about whether the gate's own tests would catch a broken gate, and several
 findings above are exactly the mutations that catalogue would have surfaced.
+
+Partly closed since. Measured at `c539afd` on 2026-08-31: the catalogue holds 67
+mutations, of which `pkg/corpus` has 21, `pkg/revert` 2 and `pkg/classreplay` 1.
+`pkg/gate` still has none, so the sentence above is now wrong about three of the
+four packages and still right about the one that decides. Thirteen files on the
+acceptance path carry no entry, including all of `pkg/gate`, `pkg/sanitizer`,
+`pkg/crsout`, `pkg/dossier/verify.go`, `pkg/eval` and every `cmd` on the path.
 
 ## How to run it properly
 
