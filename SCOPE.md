@@ -107,37 +107,18 @@ back to its own ID and so counts as its own person; `TrustStore.UnnamedCount`
 reports how many are in that state. Naming every provisioned key is a
 deployment discipline the gate can report on but not impose.
 
-## Three exemptions that did not survive being checked
+## No mutation is exempt any more
 
 `make mutation-test-root` supports an `untestable-on-this-host` verdict for a
-guard whose precondition cannot be produced here. Three mutations carried one.
-None of the three reasons held up.
+guard whose precondition cannot be produced here. Three mutations carried one and
+none of the three reasons held up: two claimed they needed a TPM simulator when
+what they needed was a lying `tpm2` on `PATH`, and one claimed it needed a reboot
+when the LSM list only had to be masked in a mount namespace. All three are now
+caught. `docs/mutation-testing.md` has the detail.
 
-- **`tpm-expected-pcr`** and **`tpm-empty-unseal`** claimed they needed a TPM
-  simulator. Both fire only on a TPM that **misbehaves**, one disagreeing with
-  SHA256 and one returning success with no material, and a simulator does
-  neither: it computes SHA256 correctly and returns material, exactly like the
-  chip. The reason named its own precondition and then prescribed the one
-  instrument that cannot produce it. What they needed was fault injection, and
-  `tpm2()` runs `tpm2_pcrread` and `tpm2_unseal` by name, so a stub first on
-  `PATH` is a lying TPM for the price of a shell script.
-
-- **`bpf-lsm-required`** claimed it needed a reboot, because the active LSM list
-  comes from the boot cmdline and cannot be changed at runtime. True, and beside
-  the point: it does not have to be changed, only **masked**. A private mount
-  namespace with a fake file bind mounted over `/sys/kernel/security/lsm` gives
-  the process a list with no `bpf` and leaves the host's own view untouched.
-  `TestAttachRefusesWhenTheBPFLSMIsAbsent` re-executes itself under
-  `unshare --mount` and drives `AttachDeny`, because what is under test is that
-  attach consults the check, not that the check works in isolation.
-
-All three are now caught, and the root catalogue has no exemptions left.
-
-The lesson is worth more than the three tests. `escaped` and `stale` are computed
-from a run; `untestable` is a sentence a human wrote that the harness accepts on
-trust. It is therefore the one verdict that has to be re-derived rather than
-inherited, and each of these survived precisely as long as it sounded plausible.
-Two of them were disproved by a single shell command.
+The lesson outlasts the three tests. `escaped` and `stale` are computed from a
+run; `untestable` is a sentence a human wrote that the harness accepts on trust,
+so it is the one verdict that has to be re-derived rather than inherited.
 
 ## Capabilities the contained workload retains
 

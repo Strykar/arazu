@@ -156,21 +156,10 @@ func TestHostEgressSurvivesAttach(t *testing.T) {
 // lsmChildEnv marks the re-executed half of the test below.
 const lsmChildEnv = "ARAZU_LSM_ABSENT_CHILD"
 
-// A missing bpf LSM is the silent-failure case AttachDeny guards against: the
-// program loads and links, the hook never fires, and that is indistinguishable
-// from a gate permitting everything. The guard only means something if attach
-// refuses before reaching that state.
-//
-// The active list is fixed at boot, so it cannot be changed at runtime. It can
-// be MASKED: a private mount namespace with a fake file bind mounted over
-// /sys/kernel/security/lsm gives this process a list with no bpf and leaves the
-// host's own view untouched. No reboot, and nothing in shipped code has to grow
-// a seam for the test to reach.
-//
-// The child half drives AttachDeny rather than RequireBPFLSM, because what is
-// under test is that attach CONSULTS the check. Asserting on the error text is
-// what keeps an unrelated failure (a missing object, no privilege) from passing
-// as evidence.
+// Without the bpf LSM the program loads and links and the hook never fires, so
+// attach has to refuse first. The active list is fixed at boot, so mask it in a
+// private mount namespace rather than change it. Drives AttachDeny, not
+// RequireBPFLSM: what is under test is that attach consults the check.
 func TestAttachRefusesWhenTheBPFLSMIsAbsent(t *testing.T) {
 	if os.Getenv(lsmChildEnv) == "1" {
 		d, err := AttachDeny(objPath, 4242)

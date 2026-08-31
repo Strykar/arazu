@@ -349,14 +349,11 @@ func TestResetWaitsForTheSequenceLock(t *testing.T) {
 	}
 }
 
-// stubTPM2 puts a lying tpm2 tool first on PATH for the rest of the test.
+// stubTPM2 puts a lying tpm2 tool first on PATH. The guards below only fire on a
+// TPM that misbehaves, which neither hardware nor a simulator does.
 //
-// Both guards below fire only on a TPM that misbehaves, and neither real
-// hardware nor a simulator misbehaves: a simulator computes SHA256 correctly and
-// returns material, exactly like the chip. Fault injection is the instrument,
-// not simulation. tpm2() runs these tools by name and exec.Command resolves that
-// against the process's own PATH, so t.Setenv is what makes the substitution
-// take. Setting it on cmd.Env would look right and change nothing.
+// exec.Command resolves the tool name against the process's own PATH, so
+// t.Setenv is what makes the substitution take; cmd.Env would change nothing.
 func stubTPM2(t *testing.T, name, script string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -366,9 +363,7 @@ func stubTPM2(t *testing.T, name, script string) {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
-// ExpectedPCR23 is held independently of the TPM so a wrong extend is a clear
-// error rather than an unexplained policy failure later. That is only worth
-// anything if the comparison is acted on.
+// The independent expectation is only worth holding if the comparison is acted on.
 func TestExtendRefusesAPCRTheTPMDisagreesWith(t *testing.T) {
 	requireTPM(t)
 	cleanPCR(t)
@@ -387,7 +382,6 @@ func TestExtendRefusesAPCRTheTPMDisagreesWith(t *testing.T) {
 }
 
 // An unseal that exits zero having produced nothing is not a released secret.
-// Treating it as one would hand a caller an empty key and call it success.
 func TestUnsealRefusesAnEmptySuccess(t *testing.T) {
 	requireTPM(t)
 	cleanPCR(t)
