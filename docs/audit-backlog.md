@@ -23,18 +23,18 @@ immediately following is not: it is from an audit of THIS tree.
 
 A second review ran against this repository, scoped to one question: whether a
 verdict's evidence provably belongs to the execution and the candidate the
-verdict names. Design and the full inventory are in
-`docs/evidence-provenance-audit.md`; run logs and
-transcripts sit beside it. Findings live on the path `cmd/gate` and `cmd/drive`
-run today.
+verdict names. The design, the full inventory, the reproducers and the run logs
+are working notes and are deliberately not in the repository. What follows is
+the part worth keeping: the findings that are live on the path `cmd/gate` and
+`cmd/drive` run today.
 
 ### P1. A reused dossier directory attributes one task's evidence to another. CONFIRMED BY EXECUTION
 
-`scripts/repro-dossier-reuse.sh`, ten seconds, no TPM or container. Two real
-Buttercup runs with different patches into one `-dossier`: run 2 reports ACCEPT
-at exit 0 for task B while the dossier still names task A's candidate and A's
-patch hash, with an identical content root. With `-seal` set, that is what gets
-signed.
+Ten seconds to reproduce, with no TPM and no container. Drive two of the real
+Buttercup runs under `testdata/crsout/realrun`, carrying different patches, into
+the same `-dossier`: the second reports ACCEPT at exit 0 for its own task while
+the dossier still names the first task's candidate and its patch hash, with an
+identical content root. With `-seal` set, that is what gets signed.
 
 `dossier.Emit` fails when `<dossier>/artifacts` exists; `emitDecision` prints the
 verdict BEFORE testing whether the write succeeded; `cmd/drive` reads that stdout
