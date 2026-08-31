@@ -64,7 +64,10 @@ test-noroute: build
 mutation-test-root: build fixtures
 	sudo -E env "PATH=$$PATH" TPM2TOOLS_TCTI=$(TPM2TOOLS_TCTI) \
 	  GOFLAGS=-mod=vendor GOPROXY=off \
-	  $(BIN)/mutation-test -repo . -catalogue testdata/mutations-root.json -work ./state/mutants-root
+	  $(BIN)/mutation-test -repo . -catalogue testdata/mutations-root.json -work ./state/mutants-root; \
+	  status=$$?; \
+	  sudo chown -R $$(id -u):$$(id -g) ./state/mutants-root; \
+	  exit $$status
 
 # The egress and TPM tests need root for netns creation and LSM attach.
 test-root: build fixtures
