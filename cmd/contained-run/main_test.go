@@ -285,10 +285,8 @@ func TestContainedModeRefusesWhenAttachFails(t *testing.T) {
 	}
 }
 
-// checkExpectations is where a mode asserts its own contract, and every branch
-// in it guards a state a healthy run never produces. Driving the method with
-// synthetic results is what makes those branches reachable at all: a real run
-// that leaked would be a broken boundary, not a test.
+// Synthetic, because every branch in checkExpectations guards a state a healthy
+// run never produces: one that leaked would be a broken boundary, not a test.
 func healthyContained() result {
 	return result{
 		Mode: modeContained,
