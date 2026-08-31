@@ -70,9 +70,17 @@ mutations across `pkg/egress` (5), `bpf` (5) and `pkg/tpmseal` (4), all caught. 
 `untestable-on-this-host` exemptions. Quoting a total without saying which catalogue
 it is implies containment coverage the default run does not provide.
 
-`cmd/contained-run` has no mutations of its own, but its tests are now what catches most
-of the root catalogue, so the denial path is covered even though the package is not
-mutated. `cmd/demo` needs no catalogue: `-break-branch` already injects six named sabotage
+`cmd/contained-run` is covered from both sides. Its tests are what catch most of the root
+catalogue, and `checkExpectations` now carries seven mutations of its own in the DEFAULT
+catalogue, one per branch.
+
+Those seven are worth the note. Every branch in `checkExpectations` guards a state a
+healthy run never reaches, so no end-to-end run can exercise them: a contained run that
+leaked would be a broken boundary, not a test. The method is pure over a `result`, so the
+tests hand it synthetic ones. That is what moves the guards from unreachable to covered,
+and it needs no root, which is why they sit in the default catalogue rather than the root
+one. A positive case goes with them, because seven refusals are all satisfied by a method
+rewritten to reject everything. `cmd/demo` needs no catalogue: `-break-branch` already injects six named sabotage
 points and `TestDemoCatchesEveryBrokenBranch` asserts each is caught, which is this
 discipline applied in place.
 

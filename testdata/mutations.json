@@ -847,5 +847,82 @@
       "./pkg/corpus/",
       "./pkg/classreplay/"
     ]
+  },
+  {
+    "id": "contained-control-must-reach",
+    "check": "a control run that reached nothing proves nothing",
+    "file": "cmd/contained-run/main.go",
+    "before": "\tif len(reached) == 0 {",
+    "after": "\tif false && len(reached) == 0 {",
+    "expect": "TestCheckExpectationsRefusesEachUnsoundShape",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "contained-leak-is-refused",
+    "check": "a reach probe that got off the box is a leak",
+    "file": "cmd/contained-run/main.go",
+    "before": "\t\tif len(reached) > 0 {",
+    "after": "\t\tif false && len(reached) > 0 {",
+    "expect": "TestCheckExpectationsRefusesEachUnsoundShape",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "contained-no-probes-proves-nothing",
+    "check": "a run with no reach probes proves nothing",
+    "file": "cmd/contained-run/main.go",
+    "before": "\t\tif len(denied) == 0 {",
+    "after": "\t\tif false && len(denied) == 0 {",
+    "expect": "TestCheckExpectationsRefusesEachUnsoundShape",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "contained-netns-cannot-refuse-local",
+    "check": "netns-only refusing a local send means something else is enforcing",
+    "file": "cmd/contained-run/main.go",
+    "before": "\t\tif len(localReached) == 0 && len(localDenied) > 0 {",
+    "after": "\t\tif false && len(localReached) == 0 && len(localDenied) > 0 {",
+    "expect": "TestCheckExpectationsRefusesEachUnsoundShape",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "contained-permitted-must-reach",
+    "check": "the permitted destination must stay reachable under containment",
+    "file": "cmd/contained-run/main.go",
+    "before": "\t\tif len(permittedDenied) > 0 {",
+    "after": "\t\tif false && len(permittedDenied) > 0 {",
+    "expect": "TestCheckExpectationsRefusesEachUnsoundShape",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "contained-local-send-must-be-refused",
+    "check": "a local raw send getting through is the bpf hook failing",
+    "file": "cmd/contained-run/main.go",
+    "before": "\t\tif len(localReached) > 0 {",
+    "after": "\t\tif false && len(localReached) > 0 {",
+    "expect": "TestCheckExpectationsRefusesEachUnsoundShape",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "contained-counters-must-witness",
+    "check": "the bpf counters must witness a denial, or the layer is unevidenced",
+    "file": "cmd/contained-run/main.go",
+    "before": "\t\tif r.BPFDenials.ConnectDenied == 0 && r.BPFDenials.SendmsgDenied == 0 {",
+    "after": "\t\tif false && r.BPFDenials.ConnectDenied == 0 && r.BPFDenials.SendmsgDenied == 0 {",
+    "expect": "TestCheckExpectationsRefusesEachUnsoundShape",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
   }
 ]

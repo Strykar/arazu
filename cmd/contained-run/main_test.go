@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"arazu/pkg/auditlog"
+	"arazu/pkg/egress"
 )
 
 // Every test below drives a network namespace, a raw socket or an LSM attach,
@@ -281,5 +282,89 @@ func TestContainedModeRefusesWhenAttachFails(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "artifact.txt")); err == nil {
 		t.Error("an artifact was produced by a run that refused to contain")
+	}
+}
+
+// checkExpectations is where a mode asserts its own contract, and every branch
+// in it guards a state a healthy run never produces. Driving the method with
+// synthetic results is what makes those branches reachable at all: a real run
+// that leaked would be a broken boundary, not a test.
+func healthyContained() result {
+	return result{
+		Mode: modeContained,
+		Probes: []probe{
+			{Name: "offbox-tcp", Class: classReach, Reached: false, Errno: "EPERM"},
+			{Name: "raw-packet-loopback", Class: classLocal, Reached: false, Errno: "EPERM"},
+			{Name: "model-loopback", Class: classPermitted, Reached: true},
+		},
+		BPFDenials: egress.Counters{ConnectDenied: 1, SendmsgDenied: 1},
+	}
+}
+
+// The matched twin for every refusal below. Without it a method rewritten to
+// reject everything would satisfy all of them.
+func TestAHealthyContainedRunIsAccepted(t *testing.T) {
+	if err := healthyContained().checkExpectations(); err != nil {
+		t.Fatalf("a sound contained run was refused: %v", err)
+	}
+}
+
+func TestCheckExpectationsRefusesEachUnsoundShape(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		build func() result
+		want  string
+	}{
+		{"control that reached nothing proves nothing", func() result {
+			r := healthyContained()
+			r.Mode = modeControl
+			return r
+		}, "control run reached nothing"},
+
+		{"a reach probe that got off the box is a leak", func() result {
+			r := healthyContained()
+			r.Probes[0].Reached = true
+			return r
+		}, "containment leaked"},
+
+		{"no reach probes means nothing was proven", func() result {
+			r := healthyContained()
+			r.Probes = r.Probes[1:]
+			return r
+		}, "no reach probes ran"},
+
+		{"netns-only cannot refuse a local send on its own", func() result {
+			r := healthyContained()
+			r.Mode = modeNetnsOnly
+			return r
+		}, "which the namespace alone cannot do"},
+
+		{"a permitted destination that was refused breaks the deployment", func() result {
+			r := healthyContained()
+			r.Probes[2].Reached = false
+			return r
+		}, "deliberately permitted destination was refused"},
+
+		{"a local raw send that got through is the bpf hook failing", func() result {
+			r := healthyContained()
+			r.Probes[1].Reached = true
+			return r
+		}, "let a local raw send through"},
+
+		{"counters at zero leave the bpf layer unevidenced", func() result {
+			r := healthyContained()
+			r.BPFDenials = egress.Counters{}
+			return r
+		}, "denied nothing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.build().checkExpectations()
+			if err == nil {
+				t.Fatal("accepted a run this mode's contract forbids")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %q, want it to mention %q", err, tc.want)
+			}
+		})
 	}
 }
