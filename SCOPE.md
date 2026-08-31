@@ -107,22 +107,37 @@ back to its own ID and so counts as its own person; `TrustStore.UnnamedCount`
 reports how many are in that state. Naming every provisioned key is a
 deployment discipline the gate can report on but not impose.
 
-## Three checks that no test on this host can catch
+## One check that no test on this host can catch
 
-`make mutation-test-root` reports these as `untestable-on-this-host` rather
-than as passes, and the reason has to say what would close them:
+`make mutation-test-root` reports it as `untestable-on-this-host` rather than as
+a pass, and the reason has to say what would close it:
 
-- **`tpm-expected-pcr`** and **`tpm-empty-unseal`** guard against a TPM that
-  disagrees with SHA256, or that returns success with no material. Neither can
-  be induced on real hardware. Closing them needs a TPM simulator.
 - **`bpf-lsm-required`** only fires on a kernel where the `bpf` LSM is absent
-  from the active `lsm=` list. This host has it, and reproducing needs a
-  reboot. That is the silent-failure case the guard exists for, which is
-  precisely why it is worth keeping despite being unexercised.
+  from the active `lsm=` list. This host has it, and the list comes from the
+  boot cmdline, so reproducing needs a reboot. That is the silent-failure case
+  the guard exists for, which is precisely why it is worth keeping despite
+  being unexercised. Making the `/sys/kernel/security/lsm` path injectable
+  would close it without a reboot, at the cost of a seam in shipped code that
+  exists only for a test.
 
-These are real guards against real failure modes. They are listed because an
-unexercised guard is not the same as a tested one, and a mutation report that
-quietly counted them as passes would be claiming otherwise.
+An unexercised guard is not a tested one, and a mutation report that quietly
+counted it as a pass would be claiming otherwise.
+
+### Two entries that were listed here and should not have been
+
+`tpm-expected-pcr` and `tpm-empty-unseal` sat here claiming they needed a TPM
+simulator. That reason was wrong on its own terms. Both fire only on a TPM that
+**misbehaves**, one disagreeing with SHA256 and one returning success with no
+material, and a simulator does neither: it computes SHA256 correctly and returns
+material, exactly like the chip. The instrument they need is fault injection,
+not simulation.
+
+`tpm2()` runs `tpm2_pcrread`, `tpm2_unseal` and the rest by name, so a stub
+first on `PATH` is a lying TPM for the price of a shell script.
+`TestExtendRefusesAPCRTheTPMDisagreesWith` and `TestUnsealRefusesAnEmptySuccess`
+do that, and both mutations are now caught. Worth recording as a lesson rather
+than quietly deleting: an exemption is a claim, and this one went unexamined for
+as long as it sounded plausible.
 
 ## Capabilities the contained workload retains
 

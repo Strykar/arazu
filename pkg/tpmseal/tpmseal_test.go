@@ -7,7 +7,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -344,5 +346,67 @@ func TestResetWaitsForTheSequenceLock(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("Reset never completed after the lock was released")
+	}
+}
+
+// stubTPM2 puts a lying tpm2 tool first on PATH for the rest of the test.
+//
+// Both guards below fire only on a TPM that misbehaves, and neither real
+// hardware nor a simulator misbehaves: a simulator computes SHA256 correctly and
+// returns material, exactly like the chip. Fault injection is the instrument,
+// not simulation. tpm2() runs these tools by name and exec.Command resolves that
+// against the process's own PATH, so t.Setenv is what makes the substitution
+// take. Setting it on cmd.Env would look right and change nothing.
+func stubTPM2(t *testing.T, name, script string) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// ExpectedPCR23 is held independently of the TPM so a wrong extend is a clear
+// error rather than an unexplained policy failure later. That is only worth
+// anything if the comparison is acted on.
+func TestExtendRefusesAPCRTheTPMDisagreesWith(t *testing.T) {
+	requireTPM(t)
+	cleanPCR(t)
+
+	// Well formed, and not what extending rootA produces.
+	stubTPM2(t, "tpm2_pcrread",
+		"#!/bin/sh\necho '  sha256:'\necho '    23: 0x"+strings.Repeat("aa", 32)+"'\n")
+
+	err := withPCRLock(func() error { return extend(rootA) })
+	if err == nil {
+		t.Fatal("extend accepted a pcr the TPM reported as something else")
+	}
+	if want := ExpectedPCR23(rootA); !strings.Contains(err.Error(), want) {
+		t.Errorf("error should name the expected value %s: %v", want, err)
+	}
+}
+
+// An unseal that exits zero having produced nothing is not a released secret.
+// Treating it as one would hand a caller an empty key and call it success.
+func TestUnsealRefusesAnEmptySuccess(t *testing.T) {
+	requireTPM(t)
+	cleanPCR(t)
+
+	dir := t.TempDir()
+	if err := Provision(dir, rootA, secret); err != nil {
+		t.Fatalf("provision: %v", err)
+	}
+
+	stubTPM2(t, "tpm2_unseal", "#!/bin/sh\nexit 0\n")
+
+	got, err := Unseal(dir, rootA)
+	if err == nil {
+		t.Fatalf("an empty unseal was treated as released material: %q", got)
+	}
+	if !errors.Is(err, ErrPolicyMismatch) {
+		t.Errorf("err = %v, want ErrPolicyMismatch", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("returned %d bytes alongside the error", len(got))
 	}
 }

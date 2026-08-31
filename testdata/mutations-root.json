@@ -5,12 +5,11 @@
     "file": "pkg/tpmseal/tpmseal.go",
     "before": "\tif want := ExpectedPCR23(contentRoot); got != want {",
     "after": "\tif want := ExpectedPCR23(contentRoot); false && got != want {",
-    "expect": "TestTPMAgreesWithTheComputedPCRValue",
+    "expect": "TestExtendRefusesAPCRTheTPMDisagreesWith",
     "packages": [
       "./pkg/tpmseal/"
     ],
-    "note": "may escape: the test does its own comparison, and a tpm that disagreed with sha256 cannot be induced on real hardware. Closing it needs a simulator.",
-    "untestableReason": "the precondition is a TPM that disagrees with SHA256 or returns success with no material; neither can be induced on real hardware, so closing this needs a TPM simulator"
+    "note": "may escape: the test does its own comparison, and a tpm that disagreed with sha256 cannot be induced on real hardware. Closing it needs a simulator."
   },
   {
     "id": "tpm-empty-secret",
@@ -29,11 +28,10 @@
     "file": "pkg/tpmseal/tpmseal.go",
     "before": "\tif len(out) == 0 {",
     "after": "\tif false && len(out) == 0 {",
-    "expect": "TestUnmeasuredStateFailsClosed",
+    "expect": "TestUnsealRefusesAnEmptySuccess",
     "packages": [
       "./pkg/tpmseal/"
-    ],
-    "untestableReason": "the precondition is a TPM that disagrees with SHA256 or returns success with no material; neither can be induced on real hardware, so closing this needs a TPM simulator"
+    ]
   },
   {
     "id": "bpf-zero-inode",

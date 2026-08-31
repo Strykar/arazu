@@ -53,8 +53,8 @@ The default catalogue is `pkg/corpus` (21), `pkg/fido` (15), `pkg/contentstore` 
 `pkg/manifest` (8), `cmd/ingress-verify` (4), `pkg/auditlog` (4), `pkg/revert` (2),
 `pkg/classreplay` (1), `pkg/dossier` (1) and `pkg/hostcap` (1). The containment and measured-state layers are a **separate** catalogue,
 `testdata/mutations-root.json`, run by `make mutation-test-root` with sudo and a TPM: 14
-mutations across `pkg/egress` (5), `bpf` (5) and `pkg/tpmseal` (4), of which 11 are caught
-and 3 are declared untestable on this host. Quoting a total without saying which catalogue
+mutations across `pkg/egress` (5), `bpf` (5) and `pkg/tpmseal` (4), of which 13 are caught
+and 1 is declared untestable on this host. Quoting a total without saying which catalogue
 it is implies containment coverage the default run does not provide.
 
 `cmd/contained-run` has no mutations of its own, but its tests are now what catches most
@@ -62,6 +62,24 @@ of the root catalogue, so the denial path is covered even though the package is 
 mutated. `cmd/demo` needs no catalogue: `-break-branch` already injects six named sabotage
 points and `TestDemoCatchesEveryBrokenBranch` asserts each is caught, which is this
 discipline applied in place.
+
+### An exemption is a claim, and two of them were wrong
+
+`tpm-expected-pcr` and `tpm-empty-unseal` carried `untestableReason` saying they needed a
+TPM simulator. They did not. Both fire only on a TPM that **misbehaves**, one disagreeing
+with SHA256 and one returning success with no material, and a simulator does neither: it
+computes SHA256 correctly and returns material, exactly like the chip. The reason text even
+named the precondition and then prescribed the one instrument that cannot produce it.
+
+What they needed was fault injection. `tpm2()` runs `tpm2_pcrread`, `tpm2_unseal` and the
+rest by name, so a stub first on `PATH` is a lying TPM for the price of a shell script.
+Note that `exec.Command` resolves against the *process's* PATH and ignores `cmd.Env`, the
+same trap `challenge.go` documents about the docker shim, so the tests use `t.Setenv`.
+
+Both are now caught, by `TestExtendRefusesAPCRTheTPMDisagreesWith` and
+`TestUnsealRefusesAnEmptySuccess`. The exemption survived as long as it did because it
+sounded plausible and nobody re-derived it, which is the same failure mode as a test that
+passes for the wrong reason: `untestable` is a verdict the harness accepts on trust.
 
 ### What the containment mutations establish, and what they do not
 
