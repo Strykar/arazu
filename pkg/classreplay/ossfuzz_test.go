@@ -9,10 +9,8 @@ import (
 	"arazu/pkg/corpus"
 )
 
-// The class size decides whether agreement across the members replayed counts
-// as agreement across the class, so it is what stands between a truncated run
-// and an ACCEPT. Reading it from a constant in the target means every case is
-// measured against the size of the one case the constant was written for.
+// A constant in the target measures every case against the size of the one it
+// was written for.
 func TestGenerateTakesTheClassSizeFromTheCase(t *testing.T) {
 	tgt := &OSSFuzzTarget{
 		RepoRoot: "../..",

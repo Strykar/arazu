@@ -65,10 +65,8 @@ func (t *OSSFuzzTarget) Generate(ctx context.Context, fc corpus.FalsifyingClass)
 	}
 	// declared is the class the case describes, n how much of it this run
 	// replays. The stage refuses to accept on the strength of a subset.
-	//
 	// It comes from the case. As a constant here it was libpng's keyword limit,
-	// applied to every case: set too low, a subset reads as the whole class,
-	// which is the direction that accepts.
+	// applied to every case that used this target.
 	declared := fc.Size
 	if declared <= 0 {
 		return nil, 0, fmt.Errorf(

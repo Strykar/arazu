@@ -135,9 +135,7 @@ func TestAFalsifyingClassNeedsAGeneratorAndADiscriminator(t *testing.T) {
 	for name, block := range map[string]string{
 		"no generator":     "falsifying_class:\n  description: d\n  generator: \"\"\n  discriminator: x\n  size: 79\n",
 		"no discriminator": "falsifying_class:\n  description: d\n  generator: g\n  discriminator: \"\"\n  size: 79\n",
-		// Without it a replayed subset cannot be told from a covered class,
-		// and agreement across a subset is the shape that accepts.
-		"no size": "falsifying_class:\n  description: d\n  generator: g\n  discriminator: x\n",
+		"no size":          "falsifying_class:\n  description: d\n  generator: g\n  discriminator: x\n",
 	} {
 		if _, err := Load(write(t, good+"\n"+block)); !errors.Is(err, ErrIncomplete) {
 			t.Errorf("a falsifying class with %s was accepted: %v", name, err)

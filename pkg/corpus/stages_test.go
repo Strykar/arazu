@@ -52,8 +52,7 @@ func reasonValues(t *testing.T) map[string]string {
 // StageUnassigned is not a fallback, it is a report: eval.Matrix counts it as
 // "the key expects a reason no stage claims", a corpus defect. So a stage that
 // emits a reason StageFor does not know scores its own correct refusal as a
-// broken answer key, and the number that says the gate works is spent on a
-// mapping oversight.
+// broken answer key.
 func TestEveryReasonNamesTheStageAnswerableForIt(t *testing.T) {
 	for name, reason := range reasonValues(t) {
 		if got := StageFor(reason); got == StageUnassigned {

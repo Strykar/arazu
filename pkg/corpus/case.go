@@ -412,8 +412,6 @@ func (c Case) Validate() error {
 			return fmt.Errorf("%w: %s has a falsifying class with no generator or no discriminator",
 				ErrIncomplete, c.where())
 		}
-		// Without it the replay cannot tell a covered class from a subset, and
-		// agreement across a subset is the shape that accepts.
 		if f.Size <= 0 {
 			return fmt.Errorf("%w: %s has a falsifying class with no size, so a replay "+
 				"cannot say whether it covered the class", ErrIncomplete, c.where())
