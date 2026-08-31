@@ -570,5 +570,236 @@
     "packages": [
       "./pkg/hostcap/"
     ]
+  },
+  {
+    "id": "corpus-required-fields-refused",
+    "check": "the required-field check refuses an incomplete case",
+    "file": "pkg/corpus/case.go",
+    "before": "\tif len(missing) > 0 {\n\t\treturn fmt.Errorf(\"%w: %s is missing %s\", ErrIncomplete, c.where(), strings.Join(missing, \", \"))\n\t}\n",
+    "after": "",
+    "expect": "TestACaseMissingWhatItIsGradedOnIsRefused",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-expected-sanitizer-required",
+    "check": "expected_sanitizer is a required field",
+    "file": "pkg/corpus/case.go",
+    "before": "\t\t\"pov.expected_sanitizer\": c.PoV.ExpectedSanitizer,\n",
+    "after": "",
+    "expect": "TestACaseMissingWhatItIsGradedOnIsRefused",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-pov-input-required",
+    "check": "pov.input is a required field",
+    "file": "pkg/corpus/case.go",
+    "before": "\t\t\"pov.input\":              c.PoV.Input,\n",
+    "after": "",
+    "expect": "TestACaseMissingWhatItIsGradedOnIsRefused",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-harness-required",
+    "check": "harness is a required field",
+    "file": "pkg/corpus/case.go",
+    "before": "\t\t\"id\": c.ID, \"language\": c.Language, \"target\": c.Target, \"harness\": c.Harness,\n",
+    "after": "\t\t\"id\": c.ID, \"language\": c.Language, \"target\": c.Target,\n",
+    "expect": "TestACaseMissingWhatItIsGradedOnIsRefused",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-reference-patch-required",
+    "check": "a hand-authored case must carry its reference fix",
+    "file": "pkg/corpus/case.go",
+    "before": "\tif c.Kind != KindCaptured {\n\t\tneed[\"reference_patch\"] = c.ReferencePatch\n\t}\n",
+    "after": "",
+    "expect": "TestACaseMissingWhatItIsGradedOnIsRefused",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-duplicate-candidate-id",
+    "check": "a candidate id may not appear twice in a case",
+    "file": "pkg/corpus/case.go",
+    "before": "\t\tif seen[cand.ID] {\n\t\t\treturn fmt.Errorf(\"%w: %s lists candidate %s twice\", ErrIncomplete, c.where(), cand.ID)\n\t\t}\n",
+    "after": "",
+    "expect": "TestDuplicateCandidateIDsAreRefused",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-unknown-label-refused",
+    "check": "a candidate label outside the vocabulary is refused",
+    "file": "pkg/corpus/case.go",
+    "before": "\t\tif !cand.Label.known() {\n\t\t\treturn fmt.Errorf(\"%w: %s candidate %s has label %q\", ErrUnknownLabel, c.where(), cand.ID, cand.Label)\n\t\t}\n",
+    "after": "",
+    "expect": "TestAnUnknownLabelIsRefused",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-label-vocabulary-member",
+    "check": "every declared label stays in the known set",
+    "file": "pkg/corpus/case.go",
+    "before": "\tcase LabelGood, LabelNonfunctional, LabelBoundaryWrong, LabelIncompleteFix,\n\t\tLabelRegression, LabelWrongBranch, LabelUnclassified:\n",
+    "after": "\tcase LabelGood, LabelNonfunctional, LabelBoundaryWrong,\n\t\tLabelRegression, LabelWrongBranch, LabelUnclassified:\n",
+    "expect": "TestAClassReplayCandidateNeedsAFalsifyingClass",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-classified-needs-reason",
+    "check": "a classified candidate must name its expected gate reason",
+    "file": "pkg/corpus/case.go",
+    "before": "\t\tif cand.Label != LabelUnclassified && cand.Label != LabelGood && cand.ExpectedGateReason == nil {\n\t\t\treturn fmt.Errorf(\"%w: %s candidate %s is labelled %s but names no expected gate reason\",\n\t\t\t\tErrIncomplete, c.where(), cand.ID, cand.Label)\n\t\t}\n",
+    "after": "",
+    "expect": "TestAClassifiedCandidateMustNameItsExpectedReason",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-classreplay-needs-class",
+    "check": "a class-replay candidate needs a class to replay",
+    "file": "pkg/corpus/case.go",
+    "before": "\t\tif cand.ExpectedGateReason != nil && *cand.ExpectedGateReason == ReasonClassReplayFail &&\n\t\t\tc.FalsifyingClass == nil {\n\t\t\treturn fmt.Errorf(\"%w: %s candidate %s expects %s but the case defines no falsifying class\",\n\t\t\t\tErrIncomplete, c.where(), cand.ID, ReasonClassReplayFail)\n\t\t}\n",
+    "after": "",
+    "expect": "TestAClassReplayCandidateNeedsAFalsifyingClass",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-class-needs-both-fields",
+    "check": "a falsifying class needs a generator AND a discriminator",
+    "file": "pkg/corpus/case.go",
+    "before": "\t\tif strings.TrimSpace(f.Generator) == \"\" || strings.TrimSpace(f.Discriminator) == \"\" {\n",
+    "after": "\t\tif strings.TrimSpace(f.Generator) == \"\" && strings.TrimSpace(f.Discriminator) == \"\" {\n",
+    "expect": "TestAFalsifyingClassNeedsAGeneratorAndADiscriminator",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-unknown-yaml-field",
+    "check": "an unrecognised yaml field means we are misreading the case",
+    "file": "pkg/corpus/case.go",
+    "before": "dec.KnownFields(true)",
+    "after": "dec.KnownFields(false)",
+    "expect": "TestAnUnrecognisedFieldIsRefused",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-load-validates",
+    "check": "Load validates what it decoded",
+    "file": "pkg/corpus/case.go",
+    "before": "\treturn c, c.Validate()\n",
+    "after": "\treturn c, nil\n",
+    "expect": "TestACaseMissingWhatItIsGradedOnIsRefused",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "corpus-empty-corpus-refused",
+    "check": "an empty corpus directory is refused, not silently zero cases",
+    "file": "pkg/corpus/case.go",
+    "before": "\tif len(out) == 0 {\n\t\treturn nil, fmt.Errorf(\"%w: no cases in %s\", ErrIncomplete, dir)\n\t}\n",
+    "after": "",
+    "expect": "TestLoadDirRefusesAnEmptyCorpus",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "crashsite-empty-declaration-undetermined",
+    "check": "an unparseable declaration is undetermined, never different",
+    "file": "pkg/corpus/crashsite.go",
+    "before": "\tif declared.empty() {\n\t\treturn SiteUndetermined\n\t}\n",
+    "after": "",
+    "expect": "TestUnparseableDeclarationIsUndetermined",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "crashsite-no-site-undetermined",
+    "check": "a report naming no site is undetermined, never different",
+    "file": "pkg/corpus/crashsite.go",
+    "before": "\tif len(sites) == 0 {\n\t\treturn SiteUndetermined\n\t}\n",
+    "after": "",
+    "expect": "TestNoInformationStaysUndetermined",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "crashsite-same-file-is-ambiguous",
+    "check": "same file and different function is ambiguous, not a new bug",
+    "file": "pkg/corpus/crashsite.go",
+    "before": "\tif sameFile {\n",
+    "after": "\tif false && sameFile {\n",
+    "expect": "TestMatchSite",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "crashsite-frames-are-scanned",
+    "check": "stack frames are read, not only the summary",
+    "file": "pkg/corpus/crashsite.go",
+    "before": "\tfor _, m := range frameRe.FindAllStringSubmatch(report, -1) {\n\t\tadd(m[2], m[1])\n\t}\n",
+    "after": "",
+    "expect": "TestMatchSite",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "crashsite-strip-both-sides",
+    "check": "the instrumentation prefix is stripped from both symbols",
+    "file": "pkg/corpus/crashsite.go",
+    "before": "\treturn strip(a) == strip(b)\n",
+    "after": "\treturn strip(a) == b\n",
+    "expect": "TestDeclaredSymbolWearingThePrefixStillMatchesItself",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "crashsite-prefix-list-member",
+    "check": "OSS_FUZZ_ stays in the instrumentation prefix list",
+    "file": "pkg/corpus/crashsite.go",
+    "before": "var instrumentationPrefixes = []string{\"OSS_FUZZ_\"}",
+    "after": "var instrumentationPrefixes = []string{}",
+    "expect": "TestInstrumentationPrefixDoesNotHideAMatch",
+    "packages": [
+      "./pkg/corpus/"
+    ]
+  },
+  {
+    "id": "crashsite-report-path-to-basename",
+    "check": "a report path is reduced to its basename before comparison",
+    "file": "pkg/corpus/crashsite.go",
+    "before": "\t\ts := CrashSite{File: filepath.Base(file), Function: fn}\n",
+    "after": "\t\ts := CrashSite{File: file, Function: fn}\n",
+    "expect": "TestMatchSite",
+    "packages": [
+      "./pkg/corpus/"
+    ]
   }
 ]

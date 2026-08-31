@@ -32,9 +32,9 @@ The rebuild matters. The `cmd` tests exec binaries out of `bin/`, so a mutant th
   tested, so it is evidence of nothing; it is deliberately not folded into `untestable`, which
   is a declared exemption carrying a reason, whereas this is the harness being broken.
 
-## Current state, 2026-08-29
+## Current state, 2026-08-30
 
-46 mutations: 43 caught, 3 subsumed, 0 uncaught, 0 did not build.
+67 mutations: 64 caught, 3 subsumed, 0 uncaught, 0 did not build.
 Read the totals off a run rather than incrementing them: this line said 40/37
 for a day after gate-reason-bad-signature was added.
 
@@ -49,14 +49,18 @@ with a warm module cache the mutants built from the cache and passed regardless.
 
 ### What this number covers
 
-The default catalogue is `pkg/fido` (15), `pkg/contentstore` (10), `pkg/manifest` (8),
-`cmd/ingress-verify` (4), `pkg/auditlog` (4), `pkg/revert` (2), `pkg/classreplay` (1),
-`pkg/dossier` (1) and `pkg/hostcap` (1). The containment and measured-state layers are a **separate** catalogue,
+The default catalogue is `pkg/corpus` (21), `pkg/fido` (15), `pkg/contentstore` (10),
+`pkg/manifest` (8), `cmd/ingress-verify` (4), `pkg/auditlog` (4), `pkg/revert` (2),
+`pkg/classreplay` (1), `pkg/dossier` (1) and `pkg/hostcap` (1). The containment and measured-state layers are a **separate** catalogue,
 `testdata/mutations-root.json`, run by `make mutation-test-root` with sudo and a TPM: 7
 mutations across `pkg/tpmseal` (4), `pkg/egress` (2) and `bpf` (1). Quoting a total without
 saying which catalogue it is implies containment coverage the default run does not provide.
 
-Neither catalogue touches `pkg/corpus`, `cmd/contained-run` or `cmd/demo`.
+Neither catalogue touches `cmd/contained-run` or `cmd/demo`. `cmd/demo` needs no
+catalogue: `-break-branch` already injects six named sabotage points and
+`TestDemoCatchesEveryBrokenBranch` asserts each is caught, which is this discipline
+applied in place. `cmd/contained-run` is a real gap, and belongs in the root catalogue
+because its tests skip without `CAP_SYS_ADMIN`.
 
 ### A green mutant run can mean the tree was broken, not the check covered
 
