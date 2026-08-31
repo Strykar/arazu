@@ -92,7 +92,7 @@ const (
 // every mutant fails with "inconsistent vendoring" before a single test runs,
 // which is what happened from the day the tree was vendored: 40 of 40 mutants
 // build-failed and the run still reported 0 uncaught.
-var treeEntries = []string{"go.mod", "go.sum", "vendor", "pkg", "cmd", "scripts", "testdata", "bpf", "Makefile"}
+var treeEntries = []string{"go.mod", "go.sum", "vendor", "pkg", "cmd", "scripts", "testdata", "bpf", "corpus", "Makefile"}
 
 var failLine = regexp.MustCompile(`(?m)^\s*--- FAIL: (\S+)`)
 
@@ -126,6 +126,12 @@ func main() {
 	}
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		fatal(err)
+	}
+
+	if pkgs := packagesToRun(muts, *only); len(pkgs) > 0 {
+		if err := baseline(root, filepath.Join(base, "_baseline"), pkgs); err != nil {
+			fatal(err)
+		}
 	}
 
 	var results []Result
@@ -193,6 +199,65 @@ func resolveSubsumption(muts []Mutation, results []Result) {
 	}
 }
 
+// prepare runs the build steps a tree needs before its tests mean anything.
+func prepare(dir string) (string, error) {
+	if out, err := runIn(dir, "make", "-C", "bpf", "egress_deny.bpf.o"); err != nil {
+		return "bpf object: " + firstLines(out, 3), err
+	}
+	if out, err := goCmd(dir, "build", "-o", "bin/", "./cmd/..."); err != nil {
+		return firstLines(out, 3), err
+	}
+	return "", nil
+}
+
+// baseline runs the catalogue's packages against an UNMUTATED copy of the tree.
+//
+// A mutant is evidence only if the tree it was cut from is green. A test that
+// fails for its own reasons fails in every mutant too, and the harness credits
+// it as a catcher, so every mutation reports caught and the run proves nothing.
+// That is not hypothetical: corpus/ was missing from treeEntries, so
+// TestEveryCaseFileLoads hit its own "would pass vacuously" guard in every
+// mutant, and 21 corpus mutations looked evidenced when none of them were.
+//
+// Aborts the run rather than marking results, because no verdict in the run is
+// trustworthy once this fails.
+func baseline(root, dir string, pkgs []string) error {
+	if err := copyTree(root, dir); err != nil {
+		return err
+	}
+	if note, err := prepare(dir); err != nil {
+		return fmt.Errorf("the unmutated tree does not build: %s", note)
+	}
+	out, err := goCmd(dir, append([]string{"test", "-count=1"}, pkgs...)...)
+	if err == nil {
+		return nil
+	}
+	if names := uniq(failLine.FindAllStringSubmatch(out, -1)); len(names) > 0 {
+		return fmt.Errorf("the unmutated tree already fails %s, so every mutant would "+
+			"credit them as catchers", strings.Join(names, " "))
+	}
+	return fmt.Errorf("the unmutated tree does not pass: %s", firstLines(out, 5))
+}
+
+// packagesToRun is every package the mutations selected for this run will test.
+func packagesToRun(muts []Mutation, only string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, m := range muts {
+		if only != "" && m.ID != only {
+			continue
+		}
+		for _, p := range m.Packages {
+			if !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 func run(root, dir string, m Mutation) Result {
 	res := Result{ID: m.ID, Check: m.Check, File: m.File, Expect: m.Expect}
 
@@ -233,15 +298,9 @@ func run(root, dir string, m Mutation) Result {
 	// mutant: vendor/ was not copied, the build environment was inherited, and
 	// now the object was stale. Rebuild unconditionally; it costs one clang
 	// invocation and removes the whole class.
-	if out, err := runIn(dir, "make", "-C", "bpf", "egress_deny.bpf.o"); err != nil {
+	if note, err := prepare(dir); err != nil {
 		res.Verdict = buildFail
-		res.Note = "bpf object: " + firstLines(out, 3)
-		return res
-	}
-
-	if out, err := goCmd(dir, "build", "-o", "bin/", "./cmd/..."); err != nil {
-		res.Verdict = buildFail
-		res.Note = firstLines(out, 3)
+		res.Note = note
 		return res
 	}
 

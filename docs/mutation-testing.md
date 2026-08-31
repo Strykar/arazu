@@ -58,6 +58,29 @@ saying which catalogue it is implies containment coverage the default run does n
 
 Neither catalogue touches `pkg/corpus`, `cmd/contained-run` or `cmd/demo`.
 
+### A green mutant run can mean the tree was broken, not the check covered
+
+`pkg/corpus` was the fourth time this harness silently tested something other than the
+mutant. `treeEntries` did not copy `corpus/`, so `TestEveryCaseFileLoads` hit its own
+"no case files found: this test would pass vacuously" guard in every mutant. The harness
+reads a failing test as a catcher, so all 21 corpus mutations reported `caught` and the
+run proved nothing. Any mutation of `pkg/corpus` would have passed, including one that no
+test noticed.
+
+The three before it were `vendor/` not copied, the build environment inherited, and a
+stale BPF object. Each was found by hand. The pattern is the same every time: a mutant is
+evidence only if the tree it was cut from is green, and nothing checked that.
+
+So the harness now runs the catalogue's packages against an **unmutated** copy first and
+aborts the whole run if anything fails, naming the test:
+
+    the unmutated tree already fails TestEveryCaseFileLoads, so every mutant would
+    credit them as catchers
+
+Verified by reverting the `treeEntries` fix: the same tree that reported "21 mutations, 0
+uncaught" and exited 0 now aborts with that line. `build-fail` does not cover this case,
+because the tree builds fine and the tests run; it is the *result* that is meaningless.
+
 ### The gate was uncovered until 2026-08-29
 
 The first 41 mutations were entirely integrity and provenance: manifests, content store,
