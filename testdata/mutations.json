@@ -824,5 +824,28 @@
       "./pkg/corpus/",
       "./pkg/eval/"
     ]
+  },
+  {
+    "id": "class-size-from-the-case",
+    "check": "the class size the truncation guard uses comes from the case, not a constant",
+    "file": "pkg/classreplay/ossfuzz.go",
+    "before": "\tdeclared := fc.Size",
+    "after": "\tdeclared := 79",
+    "expect": "TestGenerateTakesTheClassSizeFromTheCase",
+    "packages": [
+      "./pkg/classreplay/"
+    ]
+  },
+  {
+    "id": "class-size-declared",
+    "check": "a falsifying class with no declared size is refused at load",
+    "file": "pkg/corpus/case.go",
+    "before": "\t\tif f.Size <= 0 {",
+    "after": "\t\tif false && f.Size <= 0 {",
+    "expect": "TestAFalsifyingClassNeedsAGeneratorAndADiscriminator",
+    "packages": [
+      "./pkg/corpus/",
+      "./pkg/classreplay/"
+    ]
   }
 ]

@@ -129,6 +129,8 @@ falsifying_class:
     permits. The injected bug is in the scan for the keyword terminator, so the
     class is ordinary valid input rather than malformed input.
   generator: corpus/falsifying-class/libpng-iccp/mkpng.py
+  # The PNG keyword length limit, i.e. the whole class.
+  size: 79
   # The fuzz harness cannot carry this class's discriminator: libpng_read_fuzzer
   # discards diagnostics, so replaying through it compared silence against
   # silence and accepted the known-incomplete fix across all 79 members.

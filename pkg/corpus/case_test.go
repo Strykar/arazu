@@ -121,6 +121,7 @@ falsifying_class:
   description: any PNG carrying an iCCP chunk
   generator: corpus/falsifying-class/libpng-iccp/mkpng.py
   discriminator: libpng names the keyword when it parses it correctly
+  size: 79
 `
 	if _, err := Load(write(t, withClass)); err != nil {
 		t.Fatalf("a class-replay candidate with a falsifying class was rejected: %v", err)
@@ -129,9 +130,14 @@ falsifying_class:
 
 // A class that cannot be run, or whose result cannot be read, is not a class.
 func TestAFalsifyingClassNeedsAGeneratorAndADiscriminator(t *testing.T) {
+	// Each arm withholds exactly one field and supplies the rest, or the
+	// refusal comes from the wrong check and the other one stops being tested.
 	for name, block := range map[string]string{
-		"no generator":     "falsifying_class:\n  description: d\n  generator: \"\"\n  discriminator: x\n",
-		"no discriminator": "falsifying_class:\n  description: d\n  generator: g\n  discriminator: \"\"\n",
+		"no generator":     "falsifying_class:\n  description: d\n  generator: \"\"\n  discriminator: x\n  size: 79\n",
+		"no discriminator": "falsifying_class:\n  description: d\n  generator: g\n  discriminator: \"\"\n  size: 79\n",
+		// Without it a replayed subset cannot be told from a covered class,
+		// and agreement across a subset is the shape that accepts.
+		"no size": "falsifying_class:\n  description: d\n  generator: g\n  discriminator: x\n",
 	} {
 		if _, err := Load(write(t, good+"\n"+block)); !errors.Is(err, ErrIncomplete) {
 			t.Errorf("a falsifying class with %s was accepted: %v", name, err)

@@ -255,6 +255,11 @@ type FalsifyingClass struct {
 	Description string `yaml:"description"`
 	// Generator is a runnable path, relative to the repo root.
 	Generator string `yaml:"generator"`
+	// Size is how many members the class has, which is what separates agreement
+	// across a replayed subset from agreement across the class. Here rather
+	// than in the target, because it is a property of the case: as a constant
+	// in OSSFuzzTarget it measured every case against libpng's.
+	Size int `yaml:"size"`
 	// Discriminator names what separates a correct fix from an incomplete one
 	// when the class is replayed, so a green run cannot be read as agreement.
 	Discriminator string `yaml:"discriminator"`
@@ -406,6 +411,12 @@ func (c Case) Validate() error {
 		if strings.TrimSpace(f.Generator) == "" || strings.TrimSpace(f.Discriminator) == "" {
 			return fmt.Errorf("%w: %s has a falsifying class with no generator or no discriminator",
 				ErrIncomplete, c.where())
+		}
+		// Without it the replay cannot tell a covered class from a subset, and
+		// agreement across a subset is the shape that accepts.
+		if f.Size <= 0 {
+			return fmt.Errorf("%w: %s has a falsifying class with no size, so a replay "+
+				"cannot say whether it covered the class", ErrIncomplete, c.where())
 		}
 	}
 	return nil

@@ -65,7 +65,16 @@ func (t *OSSFuzzTarget) Generate(ctx context.Context, fc corpus.FalsifyingClass)
 	}
 	// declared is the class the case describes, n how much of it this run
 	// replays. The stage refuses to accept on the strength of a subset.
-	const declared = 79 // the PNG keyword length limit, i.e. the whole class
+	//
+	// It comes from the case. As a constant here it was libpng's keyword limit,
+	// applied to every case: set too low, a subset reads as the whole class,
+	// which is the direction that accepts.
+	declared := fc.Size
+	if declared <= 0 {
+		return nil, 0, fmt.Errorf(
+			"the case declares no falsifying_class size, so whether a run covered the " +
+				"class cannot be decided")
+	}
 	n := t.Members
 	if n <= 0 || n > declared {
 		n = declared
