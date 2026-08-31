@@ -207,7 +207,17 @@ divide by whether they need a *reference patch*:
 | M0 empty-patch, M1 revert-attribution | nothing | yes |
 | M3 sanitizer-gated reachability | nothing; diffs against the pre-patch build | yes |
 | M4 non-determinism, candidate disagreement | nothing | yes, once built |
-| M2 falsifying-class replay | **a reference fix AND a per-case observer** | no |
+| M2 falsifying-class replay | **a reference fix, a per-case observer AND a declared class size** | no |
+
+The third requirement is enforced earlier than the table's framing suggests, and
+that matters for the other rows. `falsifying_class.size` is what separates
+agreement across the class from agreement across a replayed subset, so
+`Case.Validate` refuses a class that omits it. The refusal lands at LOAD, and
+`LoadDir` stops at the first error, so a case declaring a class without a size
+does not merely become ungradable by M2: it stops the whole corpus loading, and
+with it M0, M1 and M3, which the table lists as needing nothing. Declaring a
+class is therefore a commitment to sizing it, not an optional extra on top of a
+case that would otherwise work.
 
 M2's second requirement is the one that is easy to miss and harder to supply. A
 fuzz harness is silent by construction, so replaying a class through it compares

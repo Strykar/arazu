@@ -344,7 +344,7 @@ case rather than to a new generator protocol. The doc's other sentence, "only th
 generator knows how big the class is", is satisfied by the case author reading
 the generator.
 
-`pkg/classreplay/ossfuzz.go:68` is `const declared = 79`, inside the generic
+Before the fix, `pkg/classreplay/ossfuzz.go:68` was `const declared = 79`, inside the generic
 `OSSFuzzTarget`, with the comment "the PNG keyword length limit". `declared` is
 what `classreplay.Stage` compares `len(members)` against to decide whether
 agreement covers the class or is a truncated subset. A second case using this
