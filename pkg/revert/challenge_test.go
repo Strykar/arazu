@@ -38,11 +38,10 @@ func priorOutput(t *testing.T, root, name, stderr string) {
 
 var testPoV = corpus.PoV{ExpectedSanitizer: "AddressSanitizer: heap-buffer-overflow"}
 
-// A run that produces no output of its own must not be answered out of the
-// directory a previous run left. Both directions are wrong verdicts: the
-// unpatched side reads a stale clean run and reports the vulnerability did not
-// reproduce, and the patched side reads a stale crashing run and rejects a
-// candidate that was never measured.
+// A run that produced no output must not be answered out of the directory a
+// previous run left. Both directions are wrong verdicts: a stale clean run reads
+// as the vulnerability not reproducing, a stale crashing one rejects a candidate
+// that was never measured.
 func TestRunThatProducedNoOutputDoesNotReadThePreviousRun(t *testing.T) {
 	c := challengeAt(t, "#!/bin/sh\nexit 1\n")
 	priorOutput(t, c.Root, "2020-01-01T00-00-00",
@@ -88,8 +87,6 @@ func buildScript(exitcode, stderr string) string {
 		"exit 0\n"
 }
 
-// run.sh exits 0 whether or not the build inside it succeeded, so trusting that
-// status runs the PoV against whatever binary was already in out/.
 func TestBuildFailureIsNotHiddenByRunShExitingZero(t *testing.T) {
 	c := challengeAt(t, buildScript("1", "cc: fatal error\\n"))
 	if err := c.Build(context.Background()); err == nil {
@@ -118,9 +115,6 @@ func TestASuccessfulBuildIsNotRefused(t *testing.T) {
 	}
 }
 
-// A build that produced no output directory of its own was not observed, and an
-// unobserved build is not a passed one. Same rule RunPoV already applies one
-// command along.
 func TestBuildThatProducedNoOutputIsNotAPass(t *testing.T) {
 	c := challengeAt(t, "#!/bin/sh\nexit 0\n")
 	if err := c.Build(context.Background()); err == nil {

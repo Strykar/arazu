@@ -51,10 +51,7 @@ func TestReportOKWhenOnlyOptionalCheckFails(t *testing.T) {
 	}
 }
 
-// The privilege row must ask for the capability, not the uid. Both directions
-// are wrong answers a human acts on: a container root has uid 0 without
-// CAP_SYS_ADMIN and would be told the host is ready, and a process holding the
-// capability without uid 0 would be told to re-run under sudo.
+// Both directions are wrong answers a human acts on, so both are pinned.
 func TestPrivilegeRowAsksForTheCapabilityNotTheUID(t *testing.T) {
 	if ok, detail := privilege(false, 0); ok {
 		t.Errorf("uid 0 without CAP_SYS_ADMIN reported as privileged (%s)", detail)

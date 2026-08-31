@@ -199,8 +199,7 @@ func (c Challenge) RunPoV(ctx context.Context, blob, harness string, pov corpus.
 	return run, nil
 }
 
-// outputSet records what was there before a run, so the run's own output can be
-// told apart from it.
+// outputSet records the output directories present before a run.
 func (c Challenge) outputSet(kind string) map[string]bool {
 	entries, _ := filepath.Glob(filepath.Join(c.Root, "out", "output", "*--"+kind))
 	seen := make(map[string]bool, len(entries))

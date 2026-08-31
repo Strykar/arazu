@@ -208,7 +208,7 @@ func Probe() Report {
 // privilege reports whether this host can create a netns and attach an LSM
 // program. The question is CAP_SYS_ADMIN, not uid 0: a container root holds the
 // uid without the capability, and a process can hold the capability without the
-// uid. euid stays in the evidence because it is what a reader will check first.
+// uid.
 func privilege(hasSysAdmin bool, euid int) (bool, string) {
 	return hasSysAdmin, fmt.Sprintf("euid=%d cap_sys_admin=%t", euid, hasSysAdmin)
 }

@@ -212,15 +212,10 @@ func prepare(dir string) (string, error) {
 
 // baseline runs the catalogue's packages against an UNMUTATED copy of the tree.
 //
-// A mutant is evidence only if the tree it was cut from is green. A test that
+// A mutant is evidence only if the tree it was cut from is green: a test that
 // fails for its own reasons fails in every mutant too, and the harness credits
 // it as a catcher, so every mutation reports caught and the run proves nothing.
-// That is not hypothetical: corpus/ was missing from treeEntries, so
-// TestEveryCaseFileLoads hit its own "would pass vacuously" guard in every
-// mutant, and 21 corpus mutations looked evidenced when none of them were.
-//
-// Aborts the run rather than marking results, because no verdict in the run is
-// trustworthy once this fails.
+// Aborts rather than marking results, because no verdict survives that.
 func baseline(root, dir string, pkgs []string) error {
 	if err := copyTree(root, dir); err != nil {
 		return err
