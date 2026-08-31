@@ -109,9 +109,36 @@ func (c Challenge) Apply(ctx context.Context, patchPath string) error {
 	return nil
 }
 
+// Build reads the container's status out of the recorded exitcode, never out of
+// run.sh's own: run.sh exits 0 whether or not the build inside it succeeded,
+// which is the trap RunPoV is built around, one command earlier.
+//
+// Trusting the exit status ran the PoV against whatever binary was already in
+// out/. Both sides of the patch boundary then measure the same binary, so it
+// errs toward REJECT rather than ACCEPT, and it is still a verdict nothing
+// supports. Seen on the staged nginx checkout rejecting the case's own good
+// candidate.
 func (c Challenge) Build(ctx context.Context) error {
-	if out, err := c.run(ctx, "./run.sh", "build"); err != nil {
-		return fmt.Errorf("%w: %s", err, tail(string(out), 400))
+	before := c.outputSet("build")
+	out, runErr := c.run(ctx, "./run.sh", "build")
+	if runErr != nil {
+		return fmt.Errorf("%w: %s", runErr, tail(string(out), 400))
+	}
+
+	dir, err := c.newestOutput("build", before)
+	if err != nil {
+		// A build that recorded nothing was not observed, and an unobserved
+		// build is not a passed one.
+		return err
+	}
+	status, err := os.ReadFile(filepath.Join(dir, "exitcode"))
+	if err != nil {
+		return fmt.Errorf("no exitcode in %s, so whether the build succeeded is unknown: %w", dir, err)
+	}
+	if code := strings.TrimSpace(string(status)); code != "0" {
+		stderr, _ := os.ReadFile(filepath.Join(dir, "stderr.log"))
+		return fmt.Errorf("the build failed with exit %q: %s",
+			code, tail(strings.TrimSpace(string(stderr)), 400))
 	}
 	return nil
 }

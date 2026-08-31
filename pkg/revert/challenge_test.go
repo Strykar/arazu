@@ -75,3 +75,64 @@ func TestOutputFromThisRunIsPreferredOverOlderOnes(t *testing.T) {
 		t.Error("read the stale clean directory instead of this run's crashing one")
 	}
 }
+
+// buildScript fakes one `run.sh build`: it creates the output directory the real
+// one creates, records the container's status in exitcode, and exits 0 whatever
+// happened inside, as the real one does.
+func buildScript(exitcode, stderr string) string {
+	return "#!/bin/sh\n" +
+		"d=out/output/2030-01-01T00-00-00--build\n" +
+		"mkdir -p \"$d\"\n" +
+		"printf '" + exitcode + "' > \"$d/exitcode\"\n" +
+		"printf '" + stderr + "' > \"$d/stderr.log\"\n" +
+		"exit 0\n"
+}
+
+// run.sh exits 0 whether or not the build inside it succeeded, so trusting that
+// status runs the PoV against whatever binary was already in out/.
+func TestBuildFailureIsNotHiddenByRunShExitingZero(t *testing.T) {
+	c := challengeAt(t, buildScript("1", "cc: fatal error\\n"))
+	if err := c.Build(context.Background()); err == nil {
+		t.Fatal("a build that failed inside the container was reported as a success")
+	}
+}
+
+// The reason has to reach the operator: the exit status alone cannot carry it.
+func TestAFailedBuildNamesWhatWentWrong(t *testing.T) {
+	c := challengeAt(t, buildScript("1", "cc: fatal error\\n"))
+	err := c.Build(context.Background())
+	if err == nil {
+		t.Fatal("no error at all")
+	}
+	if !strings.Contains(err.Error(), "cc: fatal error") {
+		t.Errorf("the refusal does not carry the build's own diagnostic: %v", err)
+	}
+}
+
+// The mirror, so the guard cannot be satisfied by refusing everything. A build
+// that really succeeded must still pass.
+func TestASuccessfulBuildIsNotRefused(t *testing.T) {
+	c := challengeAt(t, buildScript("0", "ok\\n"))
+	if err := c.Build(context.Background()); err != nil {
+		t.Fatalf("a build that succeeded was refused: %v", err)
+	}
+}
+
+// A build that produced no output directory of its own was not observed, and an
+// unobserved build is not a passed one. Same rule RunPoV already applies one
+// command along.
+func TestBuildThatProducedNoOutputIsNotAPass(t *testing.T) {
+	c := challengeAt(t, "#!/bin/sh\nexit 0\n")
+	if err := c.Build(context.Background()); err == nil {
+		t.Fatal("a build that recorded nothing was treated as a success")
+	}
+}
+
+// Unreadable is not zero. Two of the 132 build directories on the staged nginx
+// checkout carry no exitcode or a blank one.
+func TestABuildWithNoRecordedStatusIsNotAPass(t *testing.T) {
+	c := challengeAt(t, "#!/bin/sh\nmkdir -p out/output/2030-01-01T00-00-00--build\nexit 0\n")
+	if err := c.Build(context.Background()); err == nil {
+		t.Fatal("a build whose status was never recorded was treated as a success")
+	}
+}

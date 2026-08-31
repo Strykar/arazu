@@ -801,5 +801,16 @@
     "packages": [
       "./pkg/corpus/"
     ]
+  },
+  {
+    "id": "build-exitcode-not-runsh-status",
+    "check": "a failed container build is refused, not read out of run.sh's exit status",
+    "file": "pkg/revert/challenge.go",
+    "before": "\tif code := strings.TrimSpace(string(status)); code != \"0\" {",
+    "after": "\tif code := strings.TrimSpace(string(status)); false && code != \"0\" {",
+    "expect": "TestBuildFailureIsNotHiddenByRunShExitingZero",
+    "packages": [
+      "./pkg/revert/"
+    ]
   }
 ]
