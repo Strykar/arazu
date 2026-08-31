@@ -100,7 +100,8 @@ and leaves the host's view untouched, which is one shell command to demonstrate.
 `TestAttachRefusesWhenTheBPFLSMIsAbsent` re-executes itself under `unshare --mount` and
 drives `AttachDeny` rather than `RequireBPFLSM`, because what is under test is that attach
 CONSULTS the check; asserting on the error text is what stops an unrelated failure passing
-as evidence.
+as evidence. It needs `unshare(1)` and `CAP_SYS_ADMIN` and skips cleanly without them, so on
+a host that cannot run it the mutation reports `escaped` rather than a false pass.
 
 All three survived as long as they sounded plausible. `escaped` and `stale` are computed
 from a run, but `untestable` is a sentence a human wrote that the harness accepts on trust,
