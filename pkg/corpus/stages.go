@@ -29,7 +29,7 @@ func StageFor(reason string) string {
 		ReasonRevertAttributeFail, ReasonPoVSiteUndetermined:
 		return StageM1
 	case ReasonClassReplayFail, ReasonClassNotDefined, ReasonUnadjudicatedBehaviourChange,
-		ReasonClassNoReference:
+		ReasonClassNoReference, ReasonClassTruncated, ReasonClassObserverMissing:
 		return StageM2
 	case ReasonNewSanitizerFinding, ReasonNewTestFailure:
 		return StageM3

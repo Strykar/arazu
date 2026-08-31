@@ -812,5 +812,17 @@
     "packages": [
       "./pkg/revert/"
     ]
+  },
+  {
+    "id": "stagefor-class-reasons",
+    "check": "every reason the vocabulary defines names the stage answerable for it",
+    "file": "pkg/corpus/stages.go",
+    "before": ", ReasonClassTruncated, ReasonClassObserverMissing",
+    "after": "",
+    "expect": "TestEveryReasonNamesTheStageAnswerableForIt",
+    "packages": [
+      "./pkg/corpus/",
+      "./pkg/eval/"
+    ]
   }
 ]
