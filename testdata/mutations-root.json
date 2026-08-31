@@ -80,5 +80,85 @@
     "packages": [
       "./pkg/tpmseal/"
     ]
+  },
+  {
+    "id": "bpf-sendmsg-deny-verdict",
+    "check": "the sendmsg hook denies rather than permits",
+    "file": "bpf/egress_deny.bpf.c",
+    "before": "\t\tbump(CTR_SENDMSG_DENIED);\n\t\treturn -EPERM;",
+    "after": "\t\tbump(CTR_SENDMSG_DENIED);\n\t\treturn 0;",
+    "expect": "TestLocalRawSendIsolatesTheBPFLayer",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "bpf-netns-scope-inverted",
+    "check": "the netns predicate matches the contained namespace, not everything else",
+    "file": "bpf/egress_deny.bpf.c",
+    "before": "\treturn ino == contained_netns_ino;",
+    "after": "\treturn ino != contained_netns_ino;",
+    "expect": "TestContainedRunReachesNothingOffBox",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "bpf-family-allowlist-packet",
+    "check": "AF_PACKET stays in the mediated family set",
+    "file": "bpf/egress_deny.bpf.c",
+    "before": "\tif (family != AF_INET && family != AF_INET6 && family != AF_PACKET)\n\t\treturn 0;",
+    "after": "\tif (family != AF_INET && family != AF_INET6)\n\t\treturn 0;",
+    "expect": "TestLocalRawSendIsolatesTheBPFLayer",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "bpf-loopback-carveout-widened",
+    "check": "the loopback carve-out is a destination test, not a blanket permit",
+    "file": "bpf/egress_deny.bpf.c",
+    "before": "\t\tif (dst_is_loopback_v4(address)) {",
+    "after": "\t\tif (1) {",
+    "expect": "TestLayerAttributionByErrno",
+    "packages": [
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "bpf-both-hooks-attached",
+    "check": "both LSM hooks attach, or neither does",
+    "file": "pkg/egress/bpf.go",
+    "before": "\tfor _, name := range []string{\"arazu_connect\", \"arazu_sendmsg\"} {",
+    "after": "\tfor _, name := range []string{\"arazu_connect\"} {",
+    "expect": "TestLocalRawSendIsolatesTheBPFLayer",
+    "packages": [
+      "./pkg/egress/",
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "bpf-inode-reaches-the-program",
+    "check": "the namespace inode is written into the loaded object",
+    "file": "pkg/egress/bpf.go",
+    "before": "\tif err := v.Set(inode); err != nil {",
+    "after": "\tif err := v.Set(uint32(0)); err != nil {",
+    "expect": "TestContainedRunReachesNothingOffBox",
+    "packages": [
+      "./pkg/egress/",
+      "./cmd/contained-run/"
+    ]
+  },
+  {
+    "id": "bpf-counter-sendmsg-denied-read",
+    "check": "the sendmsg denial counter is actually read back",
+    "file": "pkg/egress/bpf.go",
+    "before": "\t\t{ctrSendmsgDenied, &c.SendmsgDenied},\n",
+    "after": "",
+    "expect": "TestKernelCountersWitnessTheDenials",
+    "packages": [
+      "./pkg/egress/",
+      "./cmd/contained-run/"
+    ]
   }
 ]

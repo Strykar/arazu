@@ -52,15 +52,32 @@ with a warm module cache the mutants built from the cache and passed regardless.
 The default catalogue is `pkg/corpus` (21), `pkg/fido` (15), `pkg/contentstore` (10),
 `pkg/manifest` (8), `cmd/ingress-verify` (4), `pkg/auditlog` (4), `pkg/revert` (2),
 `pkg/classreplay` (1), `pkg/dossier` (1) and `pkg/hostcap` (1). The containment and measured-state layers are a **separate** catalogue,
-`testdata/mutations-root.json`, run by `make mutation-test-root` with sudo and a TPM: 7
-mutations across `pkg/tpmseal` (4), `pkg/egress` (2) and `bpf` (1). Quoting a total without
-saying which catalogue it is implies containment coverage the default run does not provide.
+`testdata/mutations-root.json`, run by `make mutation-test-root` with sudo and a TPM: 14
+mutations across `pkg/egress` (5), `bpf` (5) and `pkg/tpmseal` (4), of which 11 are caught
+and 3 are declared untestable on this host. Quoting a total without saying which catalogue
+it is implies containment coverage the default run does not provide.
 
-Neither catalogue touches `cmd/contained-run` or `cmd/demo`. `cmd/demo` needs no
-catalogue: `-break-branch` already injects six named sabotage points and
-`TestDemoCatchesEveryBrokenBranch` asserts each is caught, which is this discipline
-applied in place. `cmd/contained-run` is a real gap, and belongs in the root catalogue
-because its tests skip without `CAP_SYS_ADMIN`.
+`cmd/contained-run` has no mutations of its own, but its tests are now what catches most
+of the root catalogue, so the denial path is covered even though the package is not
+mutated. `cmd/demo` needs no catalogue: `-break-branch` already injects six named sabotage
+points and `TestDemoCatchesEveryBrokenBranch` asserts each is caught, which is this
+discipline applied in place.
+
+### What the containment mutations establish, and what they do not
+
+The denial path used to rest on one mutation, `bpf-deny-verdict`, on the connect hook. The
+sendmsg hook, the namespace predicate, the address-family set and the loopback carve-out
+were all unmutated, so "0 uncaught" said nothing about them. Seven mutations now cover
+them, including two set members that a whole-mechanism test cannot reach: dropping
+`AF_PACKET` from the mediated families, and attaching `arazu_connect` without
+`arazu_sendmsg`, which is the gap `AttachDeny`'s own doc names.
+
+One result is worth recording because it confirms a claim this repository makes elsewhere.
+`bpf-loopback-carveout-widened` turns the carve-out into a blanket permit at connect, and
+`TestContainedRunReachesNothingOffBox` still passes. Only the attribution and counter tests
+catch it. That is SCOPE.md's sentence demonstrated rather than asserted: the namespace, not
+the BPF program, is what supports the claim that no path exists. The BPF layer is there for
+attribution, and the tests that fail are precisely the ones that measure attribution.
 
 ### A green mutant run can mean the tree was broken, not the check covered
 
