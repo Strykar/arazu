@@ -50,12 +50,11 @@
     "file": "pkg/egress/bpf.go",
     "before": "\tif err := RequireBPFLSM(); err != nil {\n\t\treturn nil, err\n\t}\n",
     "after": "",
-    "expect": "TestRequireBPFLSMAgreesWithTheKernel",
+    "expect": "TestAttachRefusesWhenTheBPFLSMIsAbsent",
     "packages": [
       "./pkg/egress/"
     ],
-    "note": "expected to escape on a host where the bpf lsm IS active: the guard only fires on a kernel without it. That is the silent-failure case the guard exists for, and it cannot be reproduced here without rebooting with a different lsm= line.",
-    "untestableReason": "the guard only fires on a kernel where the bpf LSM is absent from the active lsm= list; this host has it, and reproducing needs a reboot"
+    "note": "expected to escape on a host where the bpf lsm IS active: the guard only fires on a kernel without it. That is the silent-failure case the guard exists for, and it cannot be reproduced here without rebooting with a different lsm= line."
   },
   {
     "id": "bpf-deny-verdict",

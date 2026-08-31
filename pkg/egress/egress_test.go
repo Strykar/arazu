@@ -5,7 +5,10 @@ package egress
 import (
 	"arazu/pkg/hostcap"
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -147,5 +150,60 @@ func TestHostEgressSurvivesAttach(t *testing.T) {
 	}
 	if c.ConnectDenied != 0 {
 		t.Errorf("host traffic was denied: %+v", c)
+	}
+}
+
+// lsmChildEnv marks the re-executed half of the test below.
+const lsmChildEnv = "ARAZU_LSM_ABSENT_CHILD"
+
+// A missing bpf LSM is the silent-failure case AttachDeny guards against: the
+// program loads and links, the hook never fires, and that is indistinguishable
+// from a gate permitting everything. The guard only means something if attach
+// refuses before reaching that state.
+//
+// The active list is fixed at boot, so it cannot be changed at runtime. It can
+// be MASKED: a private mount namespace with a fake file bind mounted over
+// /sys/kernel/security/lsm gives this process a list with no bpf and leaves the
+// host's own view untouched. No reboot, and nothing in shipped code has to grow
+// a seam for the test to reach.
+//
+// The child half drives AttachDeny rather than RequireBPFLSM, because what is
+// under test is that attach CONSULTS the check. Asserting on the error text is
+// what keeps an unrelated failure (a missing object, no privilege) from passing
+// as evidence.
+func TestAttachRefusesWhenTheBPFLSMIsAbsent(t *testing.T) {
+	if os.Getenv(lsmChildEnv) == "1" {
+		d, err := AttachDeny(objPath, 4242)
+		if err == nil {
+			d.Close()
+			fmt.Fprintln(os.Stderr, "AttachDeny succeeded with the bpf LSM absent from the list")
+			os.Exit(1)
+		}
+		if !strings.Contains(err.Error(), "bpf LSM is not active") {
+			fmt.Fprintf(os.Stderr, "attach failed for the wrong reason: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	requireRoot(t)
+	if _, err := exec.LookPath("unshare"); err != nil {
+		t.Skip("needs unshare(1) to mask the LSM list")
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := filepath.Join(t.TempDir(), "lsm")
+	if err := os.WriteFile(fake, []byte("capability,landlock,lockdown,yama\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("unshare", "--mount", "sh", "-c",
+		`mount --bind "$1" /sys/kernel/security/lsm && exec "$2" -test.run='^TestAttachRefusesWhenTheBPFLSMIsAbsent$'`,
+		"sh", fake, self)
+	cmd.Env = append(os.Environ(), lsmChildEnv+"=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("attach was not refused with the bpf LSM absent: %v\n%s", err, out)
 	}
 }

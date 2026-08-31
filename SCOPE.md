@@ -107,37 +107,37 @@ back to its own ID and so counts as its own person; `TrustStore.UnnamedCount`
 reports how many are in that state. Naming every provisioned key is a
 deployment discipline the gate can report on but not impose.
 
-## One check that no test on this host can catch
+## Three exemptions that did not survive being checked
 
-`make mutation-test-root` reports it as `untestable-on-this-host` rather than as
-a pass, and the reason has to say what would close it:
+`make mutation-test-root` supports an `untestable-on-this-host` verdict for a
+guard whose precondition cannot be produced here. Three mutations carried one.
+None of the three reasons held up.
 
-- **`bpf-lsm-required`** only fires on a kernel where the `bpf` LSM is absent
-  from the active `lsm=` list. This host has it, and the list comes from the
-  boot cmdline, so reproducing needs a reboot. That is the silent-failure case
-  the guard exists for, which is precisely why it is worth keeping despite
-  being unexercised. Making the `/sys/kernel/security/lsm` path injectable
-  would close it without a reboot, at the cost of a seam in shipped code that
-  exists only for a test.
+- **`tpm-expected-pcr`** and **`tpm-empty-unseal`** claimed they needed a TPM
+  simulator. Both fire only on a TPM that **misbehaves**, one disagreeing with
+  SHA256 and one returning success with no material, and a simulator does
+  neither: it computes SHA256 correctly and returns material, exactly like the
+  chip. The reason named its own precondition and then prescribed the one
+  instrument that cannot produce it. What they needed was fault injection, and
+  `tpm2()` runs `tpm2_pcrread` and `tpm2_unseal` by name, so a stub first on
+  `PATH` is a lying TPM for the price of a shell script.
 
-An unexercised guard is not a tested one, and a mutation report that quietly
-counted it as a pass would be claiming otherwise.
+- **`bpf-lsm-required`** claimed it needed a reboot, because the active LSM list
+  comes from the boot cmdline and cannot be changed at runtime. True, and beside
+  the point: it does not have to be changed, only **masked**. A private mount
+  namespace with a fake file bind mounted over `/sys/kernel/security/lsm` gives
+  the process a list with no `bpf` and leaves the host's own view untouched.
+  `TestAttachRefusesWhenTheBPFLSMIsAbsent` re-executes itself under
+  `unshare --mount` and drives `AttachDeny`, because what is under test is that
+  attach consults the check, not that the check works in isolation.
 
-### Two entries that were listed here and should not have been
+All three are now caught, and the root catalogue has no exemptions left.
 
-`tpm-expected-pcr` and `tpm-empty-unseal` sat here claiming they needed a TPM
-simulator. That reason was wrong on its own terms. Both fire only on a TPM that
-**misbehaves**, one disagreeing with SHA256 and one returning success with no
-material, and a simulator does neither: it computes SHA256 correctly and returns
-material, exactly like the chip. The instrument they need is fault injection,
-not simulation.
-
-`tpm2()` runs `tpm2_pcrread`, `tpm2_unseal` and the rest by name, so a stub
-first on `PATH` is a lying TPM for the price of a shell script.
-`TestExtendRefusesAPCRTheTPMDisagreesWith` and `TestUnsealRefusesAnEmptySuccess`
-do that, and both mutations are now caught. Worth recording as a lesson rather
-than quietly deleting: an exemption is a claim, and this one went unexamined for
-as long as it sounded plausible.
+The lesson is worth more than the three tests. `escaped` and `stale` are computed
+from a run; `untestable` is a sentence a human wrote that the harness accepts on
+trust. It is therefore the one verdict that has to be re-derived rather than
+inherited, and each of these survived precisely as long as it sounded plausible.
+Two of them were disproved by a single shell command.
 
 ## Capabilities the contained workload retains
 

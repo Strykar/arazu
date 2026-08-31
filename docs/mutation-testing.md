@@ -53,8 +53,8 @@ The default catalogue is `pkg/corpus` (21), `pkg/fido` (15), `pkg/contentstore` 
 `pkg/manifest` (8), `cmd/ingress-verify` (4), `pkg/auditlog` (4), `pkg/revert` (2),
 `pkg/classreplay` (1), `pkg/dossier` (1) and `pkg/hostcap` (1). The containment and measured-state layers are a **separate** catalogue,
 `testdata/mutations-root.json`, run by `make mutation-test-root` with sudo and a TPM: 14
-mutations across `pkg/egress` (5), `bpf` (5) and `pkg/tpmseal` (4), of which 13 are caught
-and 1 is declared untestable on this host. Quoting a total without saying which catalogue
+mutations across `pkg/egress` (5), `bpf` (5) and `pkg/tpmseal` (4), all caught. It carries no
+`untestable-on-this-host` exemptions. Quoting a total without saying which catalogue
 it is implies containment coverage the default run does not provide.
 
 `cmd/contained-run` has no mutations of its own, but its tests are now what catches most
@@ -63,7 +63,7 @@ mutated. `cmd/demo` needs no catalogue: `-break-branch` already injects six name
 points and `TestDemoCatchesEveryBrokenBranch` asserts each is caught, which is this
 discipline applied in place.
 
-### An exemption is a claim, and two of them were wrong
+### An exemption is a claim, and all three of ours were wrong
 
 `tpm-expected-pcr` and `tpm-empty-unseal` carried `untestableReason` saying they needed a
 TPM simulator. They did not. Both fire only on a TPM that **misbehaves**, one disagreeing
@@ -77,9 +77,21 @@ Note that `exec.Command` resolves against the *process's* PATH and ignores `cmd.
 same trap `challenge.go` documents about the docker shim, so the tests use `t.Setenv`.
 
 Both are now caught, by `TestExtendRefusesAPCRTheTPMDisagreesWith` and
-`TestUnsealRefusesAnEmptySuccess`. The exemption survived as long as it did because it
-sounded plausible and nobody re-derived it, which is the same failure mode as a test that
-passes for the wrong reason: `untestable` is a verdict the harness accepts on trust.
+`TestUnsealRefusesAnEmptySuccess`.
+
+The third, `bpf-lsm-required`, claimed it needed a reboot: the active LSM list comes from
+the boot cmdline and cannot be changed at runtime. That is true and beside the point. The
+list does not have to be changed, only **masked**. A private mount namespace with a fake
+file bind mounted over `/sys/kernel/security/lsm` gives the process a list with no `bpf`
+and leaves the host's view untouched, which is one shell command to demonstrate.
+`TestAttachRefusesWhenTheBPFLSMIsAbsent` re-executes itself under `unshare --mount` and
+drives `AttachDeny` rather than `RequireBPFLSM`, because what is under test is that attach
+CONSULTS the check; asserting on the error text is what stops an unrelated failure passing
+as evidence.
+
+All three survived as long as they sounded plausible. `escaped` and `stale` are computed
+from a run, but `untestable` is a sentence a human wrote that the harness accepts on trust,
+so it is the one verdict that has to be re-derived rather than inherited.
 
 ### What the containment mutations establish, and what they do not
 
